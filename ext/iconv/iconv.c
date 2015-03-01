@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -165,7 +165,7 @@ zend_module_entry iconv_module_entry = {
 
 #ifdef COMPILE_DL_ICONV
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(iconv)
 #endif
@@ -174,7 +174,7 @@ ZEND_GET_MODULE(iconv)
 static PHP_GINIT_FUNCTION(iconv)
 {
 #if defined(COMPILE_DL_ICONV) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	iconv_globals->input_encoding = NULL;
 	iconv_globals->output_encoding = NULL;
@@ -1338,7 +1338,9 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 				ini_in_p = in_p;
 
 				for (out_size = (char_cnt - 2) / 3; out_size > 0;) {
+#if !ICONV_SUPPORTS_ERRNO
 					size_t prev_out_left;
+#endif
 
 					nbytes_required = 0;
 
@@ -1374,8 +1376,9 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 						}
 #endif
 					}
-
+#if !ICONV_SUPPORTS_ERRNO
 					prev_out_left = out_left;
+#endif
 					if (iconv(cd, NULL, NULL, (char **) &out_p, &out_left) == (size_t)-1) {
 #if ICONV_SUPPORTS_ERRNO
 						if (errno != E2BIG) {

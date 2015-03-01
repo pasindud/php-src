@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -161,6 +161,7 @@ typedef struct _zend_persistent_script {
 	int            ping_auto_globals_mask; /* which autoglobals are used by the script */
 	accel_time_t   timestamp;              /* the script modification time */
 	zend_bool      corrupted;
+	zend_bool      is_phar;
 
 	void          *mem;                    /* shared memory area used by script structures */
 	size_t         size;                   /* size of used shared memory */
@@ -287,7 +288,7 @@ extern zend_accel_shared_globals *accel_shared_globals;
 # define ZCG(v)	ZEND_TSRMG(accel_globals_id, zend_accel_globals *, v)
 extern int accel_globals_id;
 # ifdef COMPILE_DL_OPCACHE
-ZEND_TSRMLS_CACHE_EXTERN;
+ZEND_TSRMLS_CACHE_EXTERN();
 # endif
 #else
 # define ZCG(v) (accel_globals.v)

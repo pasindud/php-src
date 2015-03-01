@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -80,7 +80,7 @@ PHP_METHOD(SessionHandler, read)
 		return;
 	}
 
-	if (PS(default_mod)->s_read(&PS(mod_data), key, &val) == FAILURE) {
+	if (PS(default_mod)->s_read(&PS(mod_data), key, &val, PS(gc_maxlifetime)) == FAILURE) {
 		RETVAL_FALSE;
 		return;
 	}
@@ -101,7 +101,7 @@ PHP_METHOD(SessionHandler, write)
 		return;
 	}
 
-	RETURN_BOOL(SUCCESS == PS(default_mod)->s_write(&PS(mod_data), key, val));
+	RETURN_BOOL(SUCCESS == PS(default_mod)->s_write(&PS(mod_data), key, val, PS(gc_maxlifetime)));
 }
 /* }}} */
 
@@ -153,5 +153,39 @@ PHP_METHOD(SessionHandler, create_sid)
 	id = PS(default_mod)->s_create_sid(&PS(mod_data));
 
 	RETURN_STR(id);
+}
+/* }}} */
+
+/* {{{ proto char SessionUpdateTimestampHandler::validateId(string id)
+   Simply return TRUE */
+PHP_METHOD(SessionHandler, validateId)
+{
+	zend_string *key;
+
+	PS_SANITY_CHECK_IS_OPEN;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &key) == FAILURE) {
+		return;
+	}
+
+	/* Legacy save handler may not support validate_sid API. Return TRUE. */
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool SessionUpdateTimestampHandler::updateTimestamp(string id, string data)
+   Simply call update_timestamp */
+PHP_METHOD(SessionHandler, updateTimestamp)
+{
+	zend_string *key, *val;
+
+	PS_SANITY_CHECK_IS_OPEN;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "SS", &key, &val) == FAILURE) {
+		return;
+	}
+
+	/* Legacy save handler may not support update_timestamp API. Just write. */
+	RETVAL_BOOL(SUCCESS == PS(default_mod)->s_write(&PS(mod_data), key, val, PS(gc_maxlifetime)));
 }
 /* }}} */

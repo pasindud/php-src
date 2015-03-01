@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -128,10 +128,8 @@ php_file_globals file_globals;
 /* }}} */
 
 #define PHP_STREAM_TO_ZVAL(stream, arg) \
-	php_stream_from_zval_no_verify(stream, arg); \
-	if (stream == NULL) {	\
-		RETURN_FALSE;	\
-	}
+	ZEND_ASSERT(Z_TYPE_P(arg) == IS_RESOURCE); \
+	php_stream_from_res(stream, Z_RES_P(arg));
 
 /* {{{ ZTS-stuff / Globals / Prototypes */
 
@@ -158,11 +156,8 @@ static ZEND_RSRC_DTOR_FUNC(file_context_dtor)
 
 static void file_globals_ctor(php_file_globals *file_globals_p)
 {
-	FG(pclose_ret) = 0;
-	FG(pclose_wait) = 0;
-	FG(user_stream_current_filename) = NULL;
-	FG(def_chunk_size) = PHP_SOCK_CHUNK_SIZE;
-	FG(wrapper_errors) = NULL;
+	memset(file_globals_p, 0, sizeof(php_file_globals));
+	file_globals_p->def_chunk_size = PHP_SOCK_CHUNK_SIZE;
 }
 
 static void file_globals_dtor(php_file_globals *file_globals_p)
@@ -1153,7 +1148,7 @@ PHPAPI PHP_FUNCTION(fgetss)
    Implements a mostly ANSI compatible fscanf() */
 PHP_FUNCTION(fscanf)
 {
-	int result, type, argc = 0;
+	int result, argc = 0;
 	size_t format_len;
 	zval *args = NULL;
 	zval *file_handle;
@@ -1165,7 +1160,7 @@ PHP_FUNCTION(fscanf)
 		return;
 	}
 
-	what = zend_fetch_resource(file_handle, -1, "File-Handle", &type, 2, php_file_le_stream(), php_file_le_pstream());
+	what = zend_fetch_resource2(Z_RES_P(file_handle), "File-Handle", php_file_le_stream(), php_file_le_pstream());
 
 	/* we can't do a ZEND_VERIFY_RESOURCE(what), otherwise we end up
 	 * with a leak if we have an invalid filehandle. This needs changing

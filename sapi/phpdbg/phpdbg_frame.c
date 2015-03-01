@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 5                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -142,11 +142,22 @@ static void phpdbg_dump_prototype(zval *tmp) /* {{{ */
 			}
 			phpdbg_xml("<arg %r");
 			if (m && j < m) {
+				char *arg_name = NULL;
+
+				if (arginfo) {
+					if (func->type == ZEND_INTERNAL_FUNCTION) {
+						arg_name = (char *)((zend_internal_arg_info *)&arginfo[j])->name;
+					} else {
+						arg_name = arginfo[j].name->val;
+					}
+				}
+
 				if (!is_variadic) {
 					is_variadic = arginfo ? arginfo[j].is_variadic : 0;
 				}
-				phpdbg_xml(" variadic=\"%s\" name=\"%s\">", is_variadic ? "variadic" : "", arginfo ? arginfo[j].name : "");
-				phpdbg_out("%s=%s", arginfo ? arginfo[j].name : "?", is_variadic ? "[": "");
+
+				phpdbg_xml(" variadic=\"%s\" name=\"%s\">", is_variadic ? "variadic" : "", arg_name ? arg_name : "");
+				phpdbg_out("%s=%s", arg_name ? arg_name : "?", is_variadic ? "[": "");
 
 			} else {
 				phpdbg_xml(">");

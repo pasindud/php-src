@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -282,7 +282,7 @@ static int filename_is_in_cache(char *filename, int filename_len)
 {
 	char *key;
 	int key_length;
-	zend_file_handle handle = {0};
+	zend_file_handle handle = {{0}, NULL, NULL, 0, 0};
 	zend_persistent_script *persistent_script;
 
 	handle.filename = filename;

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -253,8 +253,20 @@ END_EXTERN_C()
  * when the resources are auto-destructed */
 #define php_stream_to_zval(stream, zval)	{ ZVAL_RES(zval, (stream)->res); (stream)->__exposed++; }
 
-#define php_stream_from_zval(xstr, pzval)	ZEND_FETCH_RESOURCE2((xstr), php_stream *, (pzval), -1, "stream", php_file_le_stream(), php_file_le_pstream())
-#define php_stream_from_zval_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource((pzval), -1, "stream", NULL, 2, php_file_le_stream(), php_file_le_pstream())
+#define php_stream_from_zval(xstr, pzval)	do { \
+	if (((xstr) = (php_stream*)zend_fetch_resource2_ex((pzval), \
+				"stream", php_file_le_stream(), php_file_le_pstream())) == NULL) { \
+		RETURN_FALSE; \
+	} \
+} while (0)
+#define php_stream_from_res(xstr, res)	do { \
+	if (((xstr) = (php_stream*)zend_fetch_resource2((res), \
+			   	"stream", php_file_le_stream(), php_file_le_pstream())) == NULL) { \
+		RETURN_FALSE; \
+	} \
+} while (0)
+#define php_stream_from_res_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource((res), "stream", php_file_le_stream(), php_file_le_pstream())
+#define php_stream_from_zval_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource2_ex((pzval), "stream", php_file_le_stream(), php_file_le_pstream())
 
 BEGIN_EXTERN_C()
 PHPAPI php_stream *php_stream_encloses(php_stream *enclosing, php_stream *enclosed);

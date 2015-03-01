@@ -28,7 +28,7 @@ static int fpm_php_zend_ini_alter_master(char *name, int name_length, char *new_
 	zend_ini_entry *ini_entry;
 	zend_string *duplicate;
 
-	if ((ini_entry = zend_hash_str_find_ptr(EG(ini_directives), name, name_length))) {
+	if ((ini_entry = zend_hash_str_find_ptr(EG(ini_directives), name, name_length)) == NULL) {
 		return FAILURE;
 	}
 
@@ -269,7 +269,7 @@ char* fpm_php_get_string_from_table(zend_string *table, char *key) /* {{{ */
 	zend_is_auto_global(table);
 
 	/* find the table and ensure it's an array */
-	data = zend_hash_find(&EG(symbol_table).ht, table);
+	data = zend_hash_find(&EG(symbol_table), table);
 	if (!data || Z_TYPE_P(data) != IS_ARRAY) {
 		return NULL;
 	}

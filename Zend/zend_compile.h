@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -34,6 +34,14 @@
 #define DEBUG_ZEND 0
 
 #define SET_UNUSED(op)  op ## _type = IS_UNUSED
+
+#define MAKE_NOP(opline) do { \
+	opline->opcode = ZEND_NOP; \
+	memset(&opline->result, 0, sizeof(opline->result)); \
+	memset(&opline->op1, 0, sizeof(opline->op1)); \
+	memset(&opline->op2, 0, sizeof(opline->op2)); \
+	opline->result_type = opline->op1_type = opline->op2_type = IS_UNUSED; \
+} while (0)
 
 #define RESET_DOC_COMMENT() do { \
 	if (CG(doc_comment)) { \
@@ -87,7 +95,8 @@ typedef union _znode_op {
 } znode_op;
 
 typedef struct _znode { /* used only during compilation */
-	int op_type;
+	zend_uchar op_type;
+	zend_uchar flag;
 	union {
 		znode_op op;
 		zval constant; /* replaced by literal/zv */
@@ -182,8 +191,8 @@ typedef struct _zend_try_catch_element {
 /* ZEND_ACC_EXPLICIT_ABSTRACT_CLASS denotes that a class was explicitly defined as abstract by using the keyword. */
 #define ZEND_ACC_IMPLICIT_ABSTRACT_CLASS	0x10
 #define ZEND_ACC_EXPLICIT_ABSTRACT_CLASS	0x20
-#define ZEND_ACC_INTERFACE		            0x80
-#define ZEND_ACC_TRAIT						0x120
+#define ZEND_ACC_INTERFACE		            0x40
+#define ZEND_ACC_TRAIT						0x80
 
 /* method flags (visibility) */
 /* The order of those must be kept - public < protected < private */
@@ -234,6 +243,9 @@ typedef struct _zend_try_catch_element {
 #define ZEND_ACC_RETURN_REFERENCE		0x4000000
 #define ZEND_ACC_DONE_PASS_TWO			0x8000000
 
+/* class has magic methods __get/__set/__unset/__isset that use guards */
+#define ZEND_ACC_USE_GUARDS				0x1000000
+
 /* function has arguments with type hinting */
 #define ZEND_ACC_HAS_TYPE_HINTS			0x10000000
 
@@ -243,7 +255,8 @@ typedef struct _zend_try_catch_element {
 /* internal function is allocated at arena */
 #define ZEND_ACC_ARENA_ALLOCATED		0x20000000
 
-#define ZEND_CE_IS_TRAIT(ce) (((ce)->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT)
+/* Function has a return type hint (or class has such non-private function) */
+#define ZEND_ACC_HAS_RETURN_TYPE		0x40000000
 
 char *zend_visibility_string(uint32_t fn_flags);
 
@@ -288,13 +301,14 @@ typedef struct _zend_arg_info {
 /* the following structure repeats the layout of zend_internal_arg_info,
  * but its fields have different meaning. It's used as the first element of
  * arg_info array to define properties of internal functions.
+ * It's also used for return type hinting.
  */
 typedef struct _zend_internal_function_info {
 	zend_uintptr_t required_num_args;
-	const char *_class_name;
-	zend_uchar _type_hint;
+	const char *class_name;
+	zend_uchar type_hint;
 	zend_bool return_reference;
-	zend_bool _allow_null;
+	zend_bool allow_null;
 	zend_bool _is_variadic;
 } zend_internal_function_info;
 
@@ -338,7 +352,7 @@ struct _zend_op_array {
 	int last_literal;
 	zval *literals;
 
-	int  last_cache_slot;
+	int  cache_size;
 	void **run_time_cache;
 
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
@@ -704,6 +718,7 @@ ZEND_API zend_bool zend_is_compiling(void);
 ZEND_API char *zend_make_compiled_string_description(const char *name);
 ZEND_API void zend_initialize_class_data(zend_class_entry *ce, zend_bool nullify_handlers);
 uint32_t zend_get_class_fetch_type(zend_string *name);
+ZEND_API zend_uchar zend_get_call_op(zend_uchar init_op, zend_function *fbc);
 
 typedef zend_bool (*zend_auto_global_callback)(zend_string *name);
 typedef struct _zend_auto_global {
@@ -716,6 +731,7 @@ typedef struct _zend_auto_global {
 ZEND_API int zend_register_auto_global(zend_string *name, zend_bool jit, zend_auto_global_callback auto_global_callback);
 ZEND_API void zend_activate_auto_globals(void);
 ZEND_API zend_bool zend_is_auto_global(zend_string *name);
+ZEND_API zend_bool zend_is_auto_global_str(char *name, size_t len);
 ZEND_API size_t zend_dirname(char *path, size_t len);
 
 int zendlex(zend_parser_stack_elem *elem);
@@ -816,9 +832,6 @@ int zend_add_literal(zend_op_array *op_array, zval *zv);
 
 #define ZEND_FETCH_ARG_MASK         0x000fffff
 
-#define ZEND_FE_FETCH_BYREF	1
-#define ZEND_FE_FETCH_WITH_KEY	2
-
 #define EXT_TYPE_FREE_ON_RETURN		(1<<2)
 
 #define ZEND_MEMBER_FUNC_CALL	1<<0
@@ -858,8 +871,7 @@ static zend_always_inline int zend_check_arg_send_type(const zend_function *zf, 
 
 
 #define ZEND_RETURNS_FUNCTION 1<<0
-#define ZEND_RETURNS_NEW      1<<1
-#define ZEND_RETURNS_VALUE    1<<2
+#define ZEND_RETURNS_VALUE    1<<1
 
 #define ZEND_FAST_RET_TO_CATCH		1
 #define ZEND_FAST_RET_TO_FINALLY	2
@@ -912,6 +924,9 @@ END_EXTERN_C()
 
 /* disable usage of builtin instruction for strlen() */
 #define ZEND_COMPILE_NO_BUILTIN_STRLEN			(1<<6)
+
+/* disable substitution of persistent constants at compile-time */
+#define ZEND_COMPILE_NO_PERSISTENT_CONSTANT_SUBSTITUTION	(1<<7)
 
 /* The default value for CG(compiler_options) */
 #define ZEND_COMPILE_DEFAULT					ZEND_COMPILE_HANDLE_OP_ARRAY

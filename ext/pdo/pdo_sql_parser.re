@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -68,9 +68,9 @@ static int scan(Scanner *s)
 
 struct placeholder {
 	char *pos;
-	int len;
+	size_t len;
 	int bindno;
-	int qlen;		/* quoted length of value */
+	size_t qlen;		/* quoted length of value */
 	char *quoted;	/* quoted value */
 	int freeq;
 	struct placeholder *next;
@@ -80,15 +80,15 @@ static void free_param_name(zval *el) {
 	efree(Z_PTR_P(el));
 }
 
-PDO_API int pdo_parse_params(pdo_stmt_t *stmt, char *inquery, int inquery_len,
-	char **outquery, int *outquery_len)
+PDO_API int pdo_parse_params(pdo_stmt_t *stmt, char *inquery, size_t inquery_len,
+	char **outquery, size_t *outquery_len)
 {
 	Scanner s;
 	char *ptr, *newbuffer;
 	int t;
 	int bindno = 0;
 	int ret = 0;
-	int newbuffer_len;
+	size_t newbuffer_len;
 	HashTable *params;
 	struct pdo_bound_param_data *param;
 	int query_type = PDO_PLACEHOLDER_NONE;
@@ -422,9 +422,7 @@ int old_pdo_parse_params(pdo_stmt_t *stmt, char *inquery, int inquery_len, char 
 		padding = 3;
 	}
 	if(params) {
-		HashPosition *param_pos;
-		zend_hash_internal_pointer_reset(params);
-		while ((param == zend_hash_get_current_data_ptr_ex(params, &param_pos)) != NULL) {
+		ZEND_HASH_FOREACH_PTR(params, param) {
 			if(param->parameter) {
 				convert_to_string(param->parameter);
 				/* accommodate a string that needs to be fully quoted
@@ -433,8 +431,7 @@ int old_pdo_parse_params(pdo_stmt_t *stmt, char *inquery, int inquery_len, char 
                 */
 				newbuffer_len += padding * Z_STRLEN_P(param->parameter);
 			}
-			zend_hash_move_forward(params);
-		}
+		} ZEND_HASH_FOREACH_END();
 	}
 	*outquery = (char *) emalloc(newbuffer_len + 1);
 	*outquery_len = 0;

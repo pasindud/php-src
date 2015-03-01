@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -65,7 +65,7 @@ static void _type_dtor(zval *zv)
 static void sapi_globals_ctor(sapi_globals_struct *sapi_globals)
 {
 #ifdef ZTS
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	memset(sapi_globals, 0, sizeof(*sapi_globals));
 	zend_hash_init_ex(&sapi_globals->known_post_content_types, 8, NULL, _type_dtor, 1, 0);
@@ -744,13 +744,8 @@ SAPI_API int sapi_header_op(sapi_header_op_enum op, void *arg)
 		/* new line/NUL character safety check */
 		uint i;
 		for (i = 0; i < header_line_len; i++) {
-			/* RFC 2616 allows new lines if followed by SP or HT */
-			int illegal_break =
-					(header_line[i+1] != ' ' && header_line[i+1] != '\t')
-					&& (
-						header_line[i] == '\n'
-						|| (header_line[i] == '\r' && header_line[i+1] != '\n'));
-			if (illegal_break) {
+			/* RFC 7230 ch. 3.2.4 deprecates folding support */
+			if (header_line[i] == '\n' || header_line[i] == '\r') {
 				efree(header_line);
 				sapi_module.sapi_error(E_WARNING, "Header may not contain "
 						"more than a single header, new line detected");

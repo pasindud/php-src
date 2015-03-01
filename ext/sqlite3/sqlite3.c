@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -2113,7 +2113,7 @@ static zend_object *php_sqlite3_object_new(zend_class_entry *class_type) /* {{{ 
 	php_sqlite3_db_object *intern;
 
 	/* Allocate memory for it */
-	intern = ecalloc(1, sizeof(php_sqlite3_db_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(php_sqlite3_db_object) + zend_object_properties_size(class_type));
 
 	/* Need to keep track of things to free */
 	zend_llist_init(&(intern->free_list),  sizeof(php_sqlite3_free_list *), (llist_dtor_func_t)php_sqlite3_free_list_dtor, 0);
@@ -2132,7 +2132,7 @@ static zend_object *php_sqlite3_stmt_object_new(zend_class_entry *class_type) /*
 	php_sqlite3_stmt *intern;
 
 	/* Allocate memory for it */
-	intern = ecalloc(1, sizeof(php_sqlite3_stmt) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(php_sqlite3_stmt) + zend_object_properties_size(class_type));
 
 	zend_object_std_init(&intern->zo, class_type);
 	object_properties_init(&intern->zo, class_type);
@@ -2148,7 +2148,7 @@ static zend_object *php_sqlite3_result_object_new(zend_class_entry *class_type) 
 	php_sqlite3_result *intern;
 
 	/* Allocate memory for it */
-	intern = ecalloc(1, sizeof(php_sqlite3_result) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(php_sqlite3_result) + zend_object_properties_size(class_type));
 
 	zend_object_std_init(&intern->zo, class_type);
 	object_properties_init(&intern->zo, class_type);
@@ -2266,7 +2266,7 @@ PHP_MINFO_FUNCTION(sqlite3)
 static PHP_GINIT_FUNCTION(sqlite3)
 {
 #if defined(COMPILE_DL_SQLITE3) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	memset(sqlite3_globals, 0, sizeof(*sqlite3_globals));
 }
@@ -2294,7 +2294,7 @@ zend_module_entry sqlite3_module_entry = {
 
 #ifdef COMPILE_DL_SQLITE3
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(sqlite3)
 #endif

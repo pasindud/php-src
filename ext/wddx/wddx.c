@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -667,7 +667,7 @@ static void php_wddx_add_var(wddx_packet *packet, zval *name_var)
 
 	if (Z_TYPE_P(name_var) == IS_STRING) {
 		zend_array *symbol_table = zend_rebuild_symbol_table();
-		if ((val = zend_hash_find(&symbol_table->ht, Z_STR_P(name_var))) != NULL) {
+		if ((val = zend_hash_find(symbol_table, Z_STR_P(name_var))) != NULL) {
 			if (Z_TYPE_P(val) == IS_INDIRECT) {
 				val = Z_INDIRECT_P(val);
 			}
@@ -1177,7 +1177,7 @@ PHP_FUNCTION(wddx_packet_start)
 	php_wddx_packet_start(packet, comment, comment_len);
 	php_wddx_add_chunk_static(packet, WDDX_STRUCT_S);
 
-	ZEND_REGISTER_RESOURCE(return_value, packet, le_wddx);
+	RETURN_RES(zend_register_resource(packet, le_wddx));
 }
 /* }}} */
 
@@ -1192,7 +1192,9 @@ PHP_FUNCTION(wddx_packet_end)
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(packet, wddx_packet *, packet_id, -1, "WDDX packet ID", le_wddx);
+	if ((packet = (wddx_packet *)zend_fetch_resource(Z_RES_P(packet_id), "WDDX packet ID", le_wddx)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	php_wddx_add_chunk_static(packet, WDDX_STRUCT_E);
 
@@ -1218,11 +1220,7 @@ PHP_FUNCTION(wddx_add_vars)
 		return;
 	}
 
-	if (!ZEND_FETCH_RESOURCE_NO_RETURN(packet, wddx_packet *, packet_id, -1, "WDDX packet ID", le_wddx)) {
-		RETURN_FALSE;
-	}
-
-	if (!packet) {
+	if ((packet = (wddx_packet *)zend_fetch_resource(Z_RES_P(packet_id), "WDDX packet ID", le_wddx)) == NULL) {
 		RETURN_FALSE;
 	}
 

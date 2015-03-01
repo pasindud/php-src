@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -93,8 +93,10 @@ void zend_optimizer_nop_removal(zend_op_array *op_array)
 				case ZEND_JMPNZ:
 				case ZEND_JMPZ_EX:
 				case ZEND_JMPNZ_EX:
-				case ZEND_FE_FETCH:
-				case ZEND_FE_RESET:
+				case ZEND_FE_FETCH_R:
+				case ZEND_FE_FETCH_RW:
+				case ZEND_FE_RESET_R:
+				case ZEND_FE_RESET_RW:
 				case ZEND_NEW:
 				case ZEND_JMP_SET:
 				case ZEND_COALESCE:

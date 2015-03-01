@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 5                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,	  |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -407,14 +407,14 @@ PHPDBG_API int phpdbg_watchpoint_parse_input(char *input, size_t len, HashTable 
 
 static int phpdbg_watchpoint_parse_symtables(char *input, size_t len, int (*callback)(phpdbg_watchpoint_t *)) {
 	if (EG(scope) && len >= 5 && !memcmp("$this", input, 5)) {
-		zend_hash_str_add(&EG(current_execute_data)->symbol_table->ht, ZEND_STRL("this"), &EG(current_execute_data)->This);
+		zend_hash_str_add(EG(current_execute_data)->symbol_table, ZEND_STRL("this"), &EG(current_execute_data)->This);
 	}
 
-	if (phpdbg_is_auto_global(input, len) && phpdbg_watchpoint_parse_input(input, len, &EG(symbol_table).ht, 0, callback, 1) != FAILURE) {
+	if (phpdbg_is_auto_global(input, len) && phpdbg_watchpoint_parse_input(input, len, &EG(symbol_table), 0, callback, 1) != FAILURE) {
 		return SUCCESS;
 	}
 
-	return phpdbg_watchpoint_parse_input(input, len, &EG(current_execute_data)->symbol_table->ht, 0, callback, 0);
+	return phpdbg_watchpoint_parse_input(input, len, EG(current_execute_data)->symbol_table, 0, callback, 0);
 }
 
 PHPDBG_WATCH(delete) /* {{{ */

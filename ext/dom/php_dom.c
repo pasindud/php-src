@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -418,16 +418,14 @@ static HashTable* dom_get_debug_info_helper(zval *object, int *is_temp) /* {{{ *
 	HashTable			*debug_info,
 						*prop_handlers = obj->prop_handler,
 						*std_props;
-	HashPosition		pos;
+	zend_string			*string_key;
 	dom_prop_handler	*entry;
 	zval object_value;
 
 	*is_temp = 1;
 
-	ALLOC_HASHTABLE(debug_info);
-
 	std_props = zend_std_get_properties(object);
-	zend_array_dup(debug_info, std_props);
+	debug_info = zend_array_dup(std_props);
 
 	if (!prop_handlers) {
 		return debug_info;
@@ -435,19 +433,10 @@ static HashTable* dom_get_debug_info_helper(zval *object, int *is_temp) /* {{{ *
 
 	ZVAL_STRING(&object_value, "(object value omitted)");
 
-	for (zend_hash_internal_pointer_reset_ex(prop_handlers, &pos);
-			(entry = zend_hash_get_current_data_ptr_ex(prop_handlers, &pos)) != NULL;
-			zend_hash_move_forward_ex(prop_handlers, &pos)) {
+	ZEND_HASH_FOREACH_STR_KEY_PTR(prop_handlers, string_key, entry) {
 		zval value;
-		zend_string *string_key;
-		zend_ulong num_key;
 
-		if (entry->read_func(obj, &value) == FAILURE) {
-			continue;
-		}
-
-		if (zend_hash_get_current_key_ex(prop_handlers, &string_key,
-			&num_key, &pos) != HASH_KEY_IS_STRING) {
+		if (entry->read_func(obj, &value) == FAILURE || !string_key) {
 			continue;
 		}
 
@@ -457,7 +446,7 @@ static HashTable* dom_get_debug_info_helper(zval *object, int *is_temp) /* {{{ *
 		}
 
 		zend_hash_add(debug_info, string_key, &value);
-	}
+	} ZEND_HASH_FOREACH_END();
 
 	zval_dtor(&object_value);
 
@@ -1081,7 +1070,7 @@ void dom_namednode_iter(dom_object *basenode, int ntype, dom_object *intern, xml
 
 static dom_object* dom_objects_set_class(zend_class_entry *class_type, zend_bool hash_copy) /* {{{ */
 {
-	dom_object *intern = ecalloc(1, sizeof(dom_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	dom_object *intern = ecalloc(1, sizeof(dom_object) + zend_object_properties_size(class_type));
 
 	zend_class_entry *base_class = class_type;
 	while (base_class->type != ZEND_INTERNAL_CLASS && base_class->parent != NULL) {
@@ -1112,7 +1101,7 @@ zend_object *dom_objects_new(zend_class_entry *class_type)
 /* {{{ zend_object_value dom_xpath_objects_new(zend_class_entry *class_type) */
 zend_object *dom_xpath_objects_new(zend_class_entry *class_type)
 {
-	dom_xpath_object *intern = ecalloc(1, sizeof(dom_xpath_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	dom_xpath_object *intern = ecalloc(1, sizeof(dom_xpath_object) + zend_object_properties_size(class_type));
 
 	ALLOC_HASHTABLE(intern->registered_phpfunctions);
 	zend_hash_init(intern->registered_phpfunctions, 0, NULL, ZVAL_PTR_DTOR, 0);
@@ -1562,11 +1551,12 @@ zval *dom_nodelist_read_dimension(zval *object, zval *offset, int type, zval *rv
 int dom_nodelist_has_dimension(zval *object, zval *member, int check_empty)
 {
 	zend_long offset = zval_get_long(member);
+	zval rv;
 
 	if (offset < 0) {
 		return 0;
 	} else {
-		zval *length = zend_read_property(Z_OBJCE_P(object), object, "length", sizeof("length") - 1, 0);
+		zval *length = zend_read_property(Z_OBJCE_P(object), object, "length", sizeof("length") - 1, 0, &rv);
 
 		return length && offset < Z_LVAL_P(length);
 	}

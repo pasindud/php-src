@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -50,6 +50,7 @@ ZEND_API int zend_eval_stringl_ex(char *str, size_t str_len, zval *retval_ptr, c
 ZEND_API char * zend_verify_internal_arg_class_kind(const zend_internal_arg_info *cur_arg_info, char **class_name, zend_class_entry **pce);
 ZEND_API char * zend_verify_arg_class_kind(const zend_arg_info *cur_arg_info, char **class_name, zend_class_entry **pce);
 ZEND_API void zend_verify_arg_error(int error_type, const zend_function *zf, uint32_t arg_num, const char *need_msg, const char *need_kind, const char *given_msg, const char *given_kind, zval *arg);
+ZEND_API void zend_verify_return_error(int error_type, const zend_function *zf, const char *need_msg, const char *need_kind, const char *returned_msg, const char *returned_kind);
 
 static zend_always_inline zval* zend_assign_to_variable(zval *variable_ptr, zval *value, zend_uchar value_type)
 {
@@ -255,21 +256,25 @@ ZEND_API int zend_do_fcall(ZEND_OPCODE_HANDLER_ARGS);
 ZEND_API void zend_clean_and_cache_symbol_table(zend_array *symbol_table);
 void zend_free_compiled_variables(zend_execute_data *execute_data);
 
+#define CACHE_ADDR(num) \
+	((void**)((char*)EX_RUN_TIME_CACHE() + (num)))
+
 #define CACHED_PTR(num) \
-	EX_RUN_TIME_CACHE()[(num)]
+	((void**)((char*)EX_RUN_TIME_CACHE() + (num)))[0]
 
 #define CACHE_PTR(num, ptr) do { \
-		EX_RUN_TIME_CACHE()[(num)] = (ptr); \
+		((void**)((char*)EX_RUN_TIME_CACHE() + (num)))[0] = (ptr); \
 	} while (0)
 
 #define CACHED_POLYMORPHIC_PTR(num, ce) \
-	((EX_RUN_TIME_CACHE()[(num)] == (ce)) ? \
-		EX_RUN_TIME_CACHE()[(num) + 1] : \
+	((((void**)((char*)EX_RUN_TIME_CACHE() + (num)))[0] == (void*)(ce)) ? \
+		((void**)((char*)EX_RUN_TIME_CACHE() + (num)))[1] : \
 		NULL)
 
 #define CACHE_POLYMORPHIC_PTR(num, ce, ptr) do { \
-		EX_RUN_TIME_CACHE()[(num)] = (ce); \
-		EX_RUN_TIME_CACHE()[(num) + 1] = (ptr); \
+		void **slot = (void**)((char*)EX_RUN_TIME_CACHE() + (num)); \
+		slot[0] = (ce); \
+		slot[1] = (ptr); \
 	} while (0)
 
 #define CACHED_PTR_EX(slot) \

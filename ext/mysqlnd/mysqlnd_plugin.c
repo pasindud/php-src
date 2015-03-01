@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2014 The PHP Group                                |
+  | Copyright (c) 2006-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -168,10 +168,6 @@ PHPAPI void * _mysqlnd_plugin_find(const char * const name)
 /* {{{ _mysqlnd_plugin_apply_with_argument */
 PHPAPI void _mysqlnd_plugin_apply_with_argument(apply_func_arg_t apply_func, void * argument)
 {
-	/* Note: We want to be thread-safe (read-only), so we can use neither
-	 * zend_hash_apply_with_argument nor zend_hash_internal_pointer_reset and
-	 * friends
-	 */
 	zval *val;
 	int result;
 

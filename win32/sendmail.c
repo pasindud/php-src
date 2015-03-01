@@ -165,20 +165,19 @@ static zend_string *php_win32_mail_trim_header(char *header)
 	}
 
 	ZVAL_STRINGL(&replace, PHP_WIN32_MAIL_UNIFY_REPLACE, strlen(PHP_WIN32_MAIL_UNIFY_REPLACE));
-	regex = zend_string_init(PHP_WIN32_MAIL_UNIFY_REPLACE, sizeof(PHP_WIN32_MAIL_UNIFY_REPLACE)-1, 0);
-
-//zend_string *php_pcre_replace(zend_string *regex, char *subject, int subject_len, zval *replace_val, int is_callable_replace, int limit, int *replace_count);
+	regex = zend_string_init(PHP_WIN32_MAIL_UNIFY_PATTERN, sizeof(PHP_WIN32_MAIL_UNIFY_PATTERN)-1, 0);
 
 	result = php_pcre_replace(regex,
-							  header, (int)strlen(header),
-							  &replace,
-							  0,
-							  -1,
-							  NULL);
+				  NULL, header, (int)strlen(header),
+				  &replace,
+				  0,
+				  -1,
+				  NULL);
+
+	zval_ptr_dtor(&replace);
+	zend_string_release(regex);
 
 	if (NULL == result) {
-		zval_ptr_dtor(&replace);
-		zend_string_free(regex);
 		return NULL;
 	}
 
@@ -186,12 +185,16 @@ static zend_string *php_win32_mail_trim_header(char *header)
 	regex = zend_string_init(PHP_WIN32_MAIL_RMVDBL_PATTERN, sizeof(PHP_WIN32_MAIL_RMVDBL_PATTERN)-1, 0);
 
 	result2 = php_pcre_replace(regex,
-							   result->val, (int)result->len,
-							   &replace,
-							  0,
-							  -1,
-							  NULL);
-	return result;
+				   result, result->val, (int)result->len,
+				   &replace,
+				  0,
+				  -1,
+				  NULL);
+	zval_ptr_dtor(&replace);
+	zend_string_release(regex);
+	zend_string_release(result);
+
+	return result2;
 #else
 	/* In case we don't have PCRE support (for whatever reason...) simply do nothing and return the unmodified header */
 	return estrdup(header);
@@ -289,7 +292,6 @@ PHPAPI int TSendMail(char *host, int *error, char **error_message,
 			efree(RPath);
 		}
 		if (headers) {
-			efree(headers);
 			efree(headers_lc);
 		}
 		/* 128 is safe here, the specifier in snprintf isn't longer than that */

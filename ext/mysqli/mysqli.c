@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -453,7 +453,7 @@ PHP_MYSQLI_EXPORT(zend_object *) mysqli_objects_new(zend_class_entry *class_type
 	zend_class_entry *mysqli_base_class;
 	zend_object_handlers *handlers;
 
-	intern = ecalloc(1, sizeof(mysqli_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(mysqli_object) + zend_object_properties_size(class_type));
 
 	mysqli_base_class = class_type;
 	while (mysqli_base_class->type != ZEND_INTERNAL_CLASS &&
@@ -537,7 +537,7 @@ PHP_INI_END()
 static PHP_GINIT_FUNCTION(mysqli)
 {
 #if defined(COMPILE_DL_MYSQLI) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	mysqli_globals->num_links = 0;
 	mysqli_globals->num_active_persistent = 0;
@@ -1032,7 +1032,7 @@ zend_module_entry mysqli_module_entry = {
 
 #ifdef COMPILE_DL_MYSQLI
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(mysqli)
 #endif
@@ -1200,16 +1200,7 @@ void php_mysqli_fetch_into_hash_aux(zval *return_value, MYSQL_RES * result, zend
 #endif
 			{
 
-#if PHP_API_VERSION < 20100412
-				/* check if we need magic quotes */
-				if (PG(magic_quotes_runtime)) {
-					ZVAL_STR(&res, php_addslashes(row[i], field_len[i], 0));
-				} else {
-#endif
-					ZVAL_STRINGL(&res, row[i], field_len[i]);
-#if PHP_API_VERSION < 20100412
-				}
-#endif
+				ZVAL_STRINGL(&res, row[i], field_len[i]);
 			}
 
 			if (fetchtype & MYSQLI_NUM) {

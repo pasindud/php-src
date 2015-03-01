@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -114,7 +114,7 @@ zend_object *xsl_objects_new(zend_class_entry *class_type)
 {
 	xsl_object *intern;
 
-	intern = ecalloc(1, sizeof(xsl_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(xsl_object) + zend_object_properties_size(class_type));
 	intern->securityPrefs = XSL_SECPREF_DEFAULT;
 
 	zend_object_std_init(&intern->std, class_type);

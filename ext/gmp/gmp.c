@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -215,7 +215,7 @@ zend_module_entry gmp_module_entry = {
 
 #ifdef COMPILE_DL_GMP
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(gmp)
 #endif
@@ -328,7 +328,7 @@ if (IS_GMP(zval)) {                                               \
 #define INIT_GMP_RETVAL(gmpnumber) \
 	gmp_create(return_value, &gmpnumber)
 
-static void gmp_strval(zval *result, mpz_t gmpnum, zend_long base);
+static void gmp_strval(zval *result, mpz_t gmpnum, int base);
 static int convert_to_gmp(mpz_t gmpnumber, zval *val, zend_long base);
 static void gmp_cmp(zval *return_value, zval *a_arg, zval *b_arg);
 
@@ -378,8 +378,7 @@ static void gmp_free_object_storage(zend_object *obj) /* {{{ */
 
 static inline zend_object *gmp_create_object_ex(zend_class_entry *ce, mpz_ptr *gmpnum_target) /* {{{ */
 {
-	gmp_object *intern = emalloc(sizeof(gmp_object)
-			+ sizeof(zval) * (ce->default_properties_count - 1));
+	gmp_object *intern = emalloc(sizeof(gmp_object) + zend_object_properties_size(ce));
 
 	zend_object_std_init(&intern->std, ce);
 	object_properties_init(&intern->std, ce);
@@ -434,8 +433,7 @@ static HashTable *gmp_get_debug_info(zval *obj, int *is_temp) /* {{{ */
 	zval zv;
 
 	*is_temp = 1;
-	ALLOC_HASHTABLE(ht);
-	zend_array_dup(ht, props);
+	ht = zend_array_dup(props);
 
 	gmp_strval(&zv, gmpnum, 10);
 	zend_hash_str_update(ht, "num", sizeof("num")-1, &zv);
@@ -561,7 +559,6 @@ static int gmp_serialize(zval *object, unsigned char **buffer, size_t *buf_len, 
 	smart_str buf = {0};
 	zval zv;
 	php_serialize_data_t serialize_data = (php_serialize_data_t) data;
-	zend_array tmp_arr;
 
 	PHP_VAR_SERIALIZE_INIT(serialize_data);
 
@@ -569,8 +566,7 @@ static int gmp_serialize(zval *object, unsigned char **buffer, size_t *buf_len, 
 	php_var_serialize(&buf, &zv, &serialize_data);
 	zval_dtor(&zv);
 
-	ZVAL_ARR(&zv, &tmp_arr);
-	tmp_arr.ht = *zend_std_get_properties(object);
+	ZVAL_ARR(&zv, zend_std_get_properties(object));
 	php_var_serialize(&buf, &zv, &serialize_data);
 
 	PHP_VAR_SERIALIZE_DESTROY(serialize_data);
@@ -634,7 +630,7 @@ exit:
 static ZEND_GINIT_FUNCTION(gmp)
 {
 #if defined(COMPILE_DL_GMP) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	gmp_globals->rand_initialized = 0;
 }
@@ -750,7 +746,7 @@ static int convert_to_gmp(mpz_t gmpnumber, zval *val, zend_long base)
 }
 /* }}} */
 
-static void gmp_strval(zval *result, mpz_t gmpnum, zend_long base) /* {{{ */
+static void gmp_strval(zval *result, mpz_t gmpnum, int base) /* {{{ */
 {
 	size_t num_len;
 	zend_string *str;
@@ -1200,7 +1196,7 @@ ZEND_FUNCTION(gmp_strval)
 
 	FETCH_GMP_ZVAL(gmpnum, gmpnumber_arg, temp_a);
 
-	gmp_strval(return_value, gmpnum, base);
+	gmp_strval(return_value, gmpnum, (int)base);
 
 	FREE_GMP_TEMP(temp_a);
 }

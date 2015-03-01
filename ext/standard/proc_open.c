@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -266,7 +266,9 @@ PHP_FUNCTION(proc_terminate)
 		RETURN_FALSE;
 	}
 
-	ZEND_FETCH_RESOURCE(proc, struct php_process_handle *, zproc, -1, "process", le_proc_open);
+	if ((proc = (struct php_process_handle *)zend_fetch_resource(Z_RES_P(zproc), "process", le_proc_open)) == NULL) {
+		RETURN_FALSE;
+	}
 
 #ifdef PHP_WIN32
 	if (TerminateProcess(proc->childHandle, 255)) {
@@ -295,7 +297,9 @@ PHP_FUNCTION(proc_close)
 		RETURN_FALSE;
 	}
 
-	ZEND_FETCH_RESOURCE(proc, struct php_process_handle *, zproc, -1, "process", le_proc_open);
+	if ((proc = (struct php_process_handle *)zend_fetch_resource(Z_RES_P(zproc), "process", le_proc_open)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	FG(pclose_wait) = 1;
 	zend_list_close(Z_RES_P(zproc));
@@ -323,7 +327,9 @@ PHP_FUNCTION(proc_get_status)
 		RETURN_FALSE;
 	}
 
-	ZEND_FETCH_RESOURCE(proc, struct php_process_handle *, zproc, -1, "process", le_proc_open);
+	if ((proc = (struct php_process_handle *)zend_fetch_resource(Z_RES_P(zproc), "process", le_proc_open)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	array_init(return_value);
 
@@ -946,7 +952,7 @@ PHP_FUNCTION(proc_open)
 		}
 	}
 
-	ZEND_REGISTER_RESOURCE(return_value, proc, le_proc_open);
+	ZVAL_RES(return_value, zend_register_resource(proc, le_proc_open));
 	return;
 
 exit_fail:

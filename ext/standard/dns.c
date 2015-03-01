@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -221,6 +221,12 @@ PHP_FUNCTION(gethostbyname)
 		return;
 	}
 
+	if(hostname_len > MAXFQDNLEN) {
+		/* name too long, protect from CVE-2015-0235 */
+		php_error_docref(NULL, E_WARNING, "Host name is too long, the limit is %d characters", MAXFQDNLEN);
+		RETURN_STRINGL(hostname, hostname_len);
+	}
+
 	RETURN_STR(php_gethostbyname(hostname));
 }
 /* }}} */
@@ -237,6 +243,12 @@ PHP_FUNCTION(gethostbynamel)
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &hostname, &hostname_len) == FAILURE) {
 		return;
+	}
+
+	if(hostname_len > MAXFQDNLEN) {
+		/* name too long, protect from CVE-2015-0235 */
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Host name is too long, the limit is %d characters", MAXFQDNLEN);
+		RETURN_FALSE;
 	}
 
 	hp = gethostbyname(hostname);
@@ -457,6 +469,7 @@ static u_char *php_parserr(u_char *cp, u_char *end, querybuf *answer, int type_t
 	add_assoc_string(subarray, "host", name);
 	add_assoc_string(subarray, "class", "IN");
 	add_assoc_long(subarray, "ttl", ttl);
+	(void) class;
 
 	if (raw) {
 		add_assoc_long(subarray, "type", type);

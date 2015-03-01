@@ -217,17 +217,14 @@ static unsigned from_array_iterate(const zval *arr,
 								   void **args,
 								   ser_context *ctx)
 {
-	HashPosition	pos;
 	unsigned		i;
 	zval			*elem;
 	char			buf[sizeof("element #4294967295")];
 	char			*bufp = buf;
 
 	/* Note i starts at 1, not 0! */
-    for (zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(arr), &pos), i = 1;
-			!ctx->err.has_error
-			&& (elem = zend_hash_get_current_data_ex(Z_ARRVAL_P(arr), &pos)) != NULL;
-			zend_hash_move_forward_ex(Z_ARRVAL_P(arr), &pos), i++) {
+	i = 1;
+	ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(arr), elem) {
 		if (snprintf(buf, sizeof(buf), "element #%u", i) >= sizeof(buf)) {
 			memcpy(buf, "element", sizeof("element"));
 		}
@@ -236,7 +233,11 @@ static unsigned from_array_iterate(const zval *arr,
 		func(elem, i, args, ctx);
 
 		zend_llist_remove_tail(&ctx->keys);
-    }
+		if (ctx->err.has_error) {
+			break;
+		}
+		i++;
+    } ZEND_HASH_FOREACH_END();
 
     return i -1;
 }
@@ -1351,15 +1352,13 @@ static void from_zval_write_fd_array_aux(zval *elem, unsigned i, void **args, se
 		php_stream *stream;
 		php_socket *sock;
 
-		ZEND_FETCH_RESOURCE_NO_RETURN(sock, php_socket *, elem, -1,
-				NULL, php_sockets_le_socket());
+		sock = (php_socket *)zend_fetch_resource_ex(elem, NULL, php_sockets_le_socket());
 		if (sock) {
 			iarr[i] = sock->bsd_socket;
 			return;
 		}
 
-		ZEND_FETCH_RESOURCE2_NO_RETURN(stream, php_stream *, elem, -1,
-				NULL, php_file_le_stream(), php_file_le_pstream());
+		stream = (php_stream *)zend_fetch_resource2_ex(elem, NULL, php_file_le_stream(), php_file_le_pstream());
 		if (stream == NULL) {
 			do_from_zval_err(ctx, "resource is not a stream or a socket");
 			return;
@@ -1423,7 +1422,7 @@ void to_zval_read_fd_array(const char *data, zval *zv, res_context *ctx)
 		}
 		if (S_ISSOCK(statbuf.st_mode)) {
 			php_socket *sock = socket_import_file_descriptor(fd);
-			zend_register_resource(&elem, sock, php_sockets_le_socket());
+			ZVAL_RES(&elem, zend_register_resource(sock, php_sockets_le_socket()));
 		} else {
 			php_stream *stream = php_stream_fopen_from_fd(fd, "rw", NULL);
 			php_stream_to_zval(stream, &elem);

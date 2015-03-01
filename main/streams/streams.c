@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -123,28 +123,21 @@ PHPAPI int php_stream_from_persistent_id(const char *persistent_id, php_stream *
 	if ((le = zend_hash_str_find_ptr(&EG(persistent_list), persistent_id, strlen(persistent_id))) != NULL) {
 		if (le->type == le_pstream) {
 			if (stream) {
-				HashPosition pos;
-				zend_resource *regentry;
+				zend_resource *regentry = NULL;
 
 				/* see if this persistent resource already has been loaded to the
 				 * regular list; allowing the same resource in several entries in the
 				 * regular list causes trouble (see bug #54623) */
-				zend_hash_internal_pointer_reset_ex(&EG(regular_list), &pos);
-				while ((regentry = zend_hash_get_current_data_ptr_ex(&EG(regular_list), &pos)) != NULL) {
-					if (regentry->ptr == le->ptr) {
-						break;
-					}
-					zend_hash_move_forward_ex(&EG(regular_list), &pos);
-				}
-
 				*stream = (php_stream*)le->ptr;
-				if (!regentry) { /* not found in regular list */
-					GC_REFCOUNT(le)++;
-					(*stream)->res = ZEND_REGISTER_RESOURCE(NULL, *stream, le_pstream);
-				} else {
-					GC_REFCOUNT(regentry)++;
-					(*stream)->res = regentry;
-				}
+				ZEND_HASH_FOREACH_PTR(&EG(regular_list), regentry) {
+					if (regentry->ptr == le->ptr) {
+						GC_REFCOUNT(regentry)++;
+						(*stream)->res = regentry;
+						return PHP_STREAM_PERSISTENT_SUCCESS;
+					}
+				} ZEND_HASH_FOREACH_END();
+				GC_REFCOUNT(le)++;
+				(*stream)->res = zend_register_resource(*stream, le_pstream);
 			}
 			return PHP_STREAM_PERSISTENT_SUCCESS;
 		}
@@ -325,7 +318,7 @@ fprintf(stderr, "stream_alloc: %s:%p persistent=%s\n", ops->label, ret, persiste
 		}
 	}
 
-	ret->res = ZEND_REGISTER_RESOURCE(NULL, ret, persistent_id ? le_pstream : le_stream);
+	ret->res = zend_register_resource(ret, persistent_id ? le_pstream : le_stream);
 	strlcpy(ret->mode, mode, sizeof(ret->mode));
 
 	ret->wrapper          = NULL;
@@ -2211,7 +2204,7 @@ PHPAPI php_stream_context *php_stream_context_alloc(void)
 	context->notifier = NULL;
 	array_init(&context->options);
 
-	context->res = ZEND_REGISTER_RESOURCE(NULL, context, php_le_stream_context());
+	context->res = zend_register_resource(context, php_le_stream_context());
 	return context;
 }
 

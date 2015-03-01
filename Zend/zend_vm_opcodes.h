@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -101,8 +101,8 @@ END_EXTERN_C()
 #define ZEND_UNSET_VAR                        74
 #define ZEND_UNSET_DIM                        75
 #define ZEND_UNSET_OBJ                        76
-#define ZEND_FE_RESET                         77
-#define ZEND_FE_FETCH                         78
+#define ZEND_FE_RESET_R                       77
+#define ZEND_FE_FETCH_R                       78
 #define ZEND_EXIT                             79
 #define ZEND_FETCH_R                          80
 #define ZEND_FETCH_DIM_R                      81
@@ -148,6 +148,14 @@ END_EXTERN_C()
 #define ZEND_STRLEN                          121
 #define ZEND_DEFINED                         122
 #define ZEND_TYPE_CHECK                      123
+#define ZEND_VERIFY_RETURN_TYPE              124
+#define ZEND_FE_RESET_RW                     125
+#define ZEND_FE_FETCH_RW                     126
+#define ZEND_FE_FREE                         127
+#define ZEND_INIT_DYNAMIC_CALL               128
+#define ZEND_DO_ICALL                        129
+#define ZEND_DO_UCALL                        130
+#define ZEND_DO_FCALL_BY_NAME                131
 #define ZEND_PRE_INC_OBJ                     132
 #define ZEND_PRE_DEC_OBJ                     133
 #define ZEND_POST_INC_OBJ                    134
@@ -181,5 +189,6 @@ END_EXTERN_C()
 #define ZEND_ASSIGN_POW                      167
 #define ZEND_BIND_GLOBAL                     168
 #define ZEND_COALESCE                        169
+#define ZEND_SPACESHIP                       170
 
 #endif

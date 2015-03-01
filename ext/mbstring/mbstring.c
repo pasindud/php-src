@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -598,7 +598,7 @@ static sapi_post_entry php_post_entries[] = {
 
 #ifdef COMPILE_DL_MBSTRING
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(mbstring)
 #endif
@@ -1495,7 +1495,7 @@ PHP_INI_END()
 static PHP_GINIT_FUNCTION(mbstring)
 {
 #if defined(COMPILE_DL_MBSTRING) && defined(ZTS)
-ZEND_TSRMLS_CACHE_UPDATE;
+ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
 	mbstring_globals->language = mbfl_no_language_uni;
@@ -3891,7 +3891,7 @@ static int _php_mbstr_parse_mail_headers(HashTable *ht, const char *str, size_t 
 	int state = 0;
 	int crlf_state = -1;
 	char *token = NULL;
-	size_t token_pos;
+	size_t token_pos = 0;
 	zend_string *fld_name, *fld_val;
 
 	ps = str;
@@ -3917,7 +3917,7 @@ static int _php_mbstr_parse_mail_headers(HashTable *ht, const char *str, size_t 
 				}
 
 				if (state == 0 || state == 1) {
-					if(token) {
+					if(token && token_pos > 0) {
 						fld_name = zend_string_init(token, token_pos, 0);
 					}
 					state = 2;
@@ -3983,7 +3983,7 @@ static int _php_mbstr_parse_mail_headers(HashTable *ht, const char *str, size_t 
 
 					case 3:
 						if (crlf_state == -1) {
-							if(token) {
+							if(token && token_pos > 0) {
 								fld_val = zend_string_init(token, token_pos, 0);
 							}
 
@@ -4032,7 +4032,7 @@ out:
 		state = 3;
 	}
 	if (state == 3) {
-		if(token) {
+		if(token && token_pos > 0) {
 			fld_val = zend_string_init(token, token_pos, 0);
 		}
 		if (fld_name != NULL && fld_val != NULL) {

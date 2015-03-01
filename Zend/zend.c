@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -120,7 +120,7 @@ static HashTable *global_class_table = NULL;
 static HashTable *global_constants_table = NULL;
 static HashTable *global_auto_globals_table = NULL;
 static HashTable *global_persistent_list = NULL;
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 
 ZEND_API zend_utility_values zend_uv;
@@ -128,7 +128,7 @@ ZEND_API zend_utility_values zend_uv;
 /* version information */
 static char *zend_version_info;
 static uint zend_version_info_length;
-#define ZEND_CORE_VERSION_INFO	"Zend Engine v" ZEND_VERSION ", Copyright (c) 1998-2014 Zend Technologies\n"
+#define ZEND_CORE_VERSION_INFO	"Zend Engine v" ZEND_VERSION ", Copyright (c) 1998-2015 Zend Technologies\n"
 #define PRINT_ZVAL_INDENT 4
 
 static void print_hash(zend_write_func_t write_func, HashTable *ht, int indent, zend_bool is_object) /* {{{ */
@@ -465,23 +465,29 @@ static void compiler_globals_dtor(zend_compiler_globals *compiler_globals) /* {{
 
 static void executor_globals_ctor(zend_executor_globals *executor_globals) /* {{{ */
 {
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
+
 	zend_startup_constants();
 	zend_copy_constants(EG(zend_constants), GLOBAL_CONSTANTS_TABLE);
 	zend_init_rsrc_plist();
 	zend_init_exception_op();
-	EG(lambda_count) = 0;
-	ZVAL_UNDEF(&EG(user_error_handler));
-	ZVAL_UNDEF(&EG(user_exception_handler));
-	EG(in_autoload) = NULL;
-	EG(current_execute_data) = NULL;
-	EG(current_module) = NULL;
-	EG(exit_status) = 0;
+	executor_globals->lambda_count = 0;
+	ZVAL_UNDEF(&executor_globals->user_error_handler);
+	ZVAL_UNDEF(&executor_globals->user_exception_handler);
+	executor_globals->in_autoload = NULL;
+	executor_globals->current_execute_data = NULL;
+	executor_globals->current_module = NULL;
+	executor_globals->exit_status = 0;
 #if XPFPA_HAVE_CW
-	EG(saved_fpu_cw) = 0;
+	executor_globals->saved_fpu_cw = 0;
 #endif
-	EG(saved_fpu_cw_ptr) = NULL;
-	EG(active) = 0;
+	executor_globals->saved_fpu_cw_ptr = NULL;
+	executor_globals->active = 0;
+	executor_globals->bailout = NULL;
+	executor_globals->error_handling  = EH_NORMAL;
+	executor_globals->exception_class = NULL;
+	executor_globals->exception = NULL;
+	executor_globals->objects_store.object_buckets = NULL;
 }
 /* }}} */
 
@@ -550,8 +556,9 @@ static zend_bool php_auto_globals_create_globals(zend_string *name) /* {{{ */
 	zval globals;
 
 	ZVAL_ARR(&globals, &EG(symbol_table));
+	Z_TYPE_INFO_P(&globals) = IS_ARRAY | (IS_TYPE_SYMBOLTABLE << Z_TYPE_FLAGS_SHIFT);
 	ZVAL_NEW_REF(&globals, &globals);
-	zend_hash_update(&EG(symbol_table).ht, name, &globals);
+	zend_hash_update(&EG(symbol_table), name, &globals);
 	return 0;
 }
 /* }}} */
@@ -563,7 +570,7 @@ int zend_startup(zend_utility_functions *utility_functions, char **extensions) /
 	zend_executor_globals *executor_globals;
 	extern ZEND_API ts_rsrc_id ini_scanner_globals_id;
 	extern ZEND_API ts_rsrc_id language_scanner_globals_id;
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #else
 	extern zend_ini_scanner_globals ini_scanner_globals;
 	extern zend_php_scanner_globals language_scanner_globals;
@@ -616,6 +623,9 @@ int zend_startup(zend_utility_functions *utility_functions, char **extensions) /
 	zend_compile_string = compile_string;
 	zend_throw_exception_hook = NULL;
 
+	/* Set up the default garbage collection implementation. */
+	gc_collect_cycles = zend_gc_collect_cycles;
+
 	zend_init_opcodes_handlers();
 
 	/* set up version */
@@ -658,9 +668,8 @@ int zend_startup(zend_utility_functions *utility_functions, char **extensions) /
 	ini_scanner_globals_ctor(&ini_scanner_globals);
 	php_scanner_globals_ctor(&language_scanner_globals);
 	zend_set_default_compile_time_values();
-	ZVAL_UNDEF(&EG(user_error_handler));
-	ZVAL_UNDEF(&EG(user_exception_handler));
 #endif
+	EG(error_reporting) = E_ALL & ~E_NOTICE;
 
 	zend_interned_strings_init();
 	zend_startup_builtin_functions();
@@ -889,13 +898,13 @@ ZEND_API void zend_deactivate(void) /* {{{ */
 		shutdown_compiler();
 	} zend_end_try();
 
-	zend_destroy_rsrc_list(&EG(regular_list));
-
 #if ZEND_DEBUG
 	if (GC_G(gc_enabled) && !CG(unclean_shutdown)) {
 		gc_collect_cycles();
 	}
 #endif
+
+	zend_destroy_rsrc_list(&EG(regular_list));
 
 #if GC_BENCH
 	fprintf(stderr, "GC Statistics\n");
@@ -954,7 +963,7 @@ ZEND_API zval *zend_get_configuration_directive(zend_string *name) /* {{{ */
 		} \
 	} while (0)
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 #else
 static void zend_error_va_list(int type, const char *format, va_list args)
@@ -962,7 +971,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 {
 	char *str;
 	int len;
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_list args;
 #endif
 	va_list usr_copy;
@@ -1056,17 +1065,21 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 	}
 
 #ifdef HAVE_DTRACE
-	if(DTRACE_ERROR_ENABLED()) {
+	if (DTRACE_ERROR_ENABLED()) {
 		char *dtrace_error_buffer;
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 		va_start(args, format);
+#endif
 		zend_vspprintf(&dtrace_error_buffer, 0, format, args);
 		DTRACE_ERROR(dtrace_error_buffer, (char *)error_filename, error_lineno);
 		efree(dtrace_error_buffer);
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 		va_end(args);
+#endif
 	}
 #endif /* HAVE_DTRACE */
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_start(args, format);
 #endif
 
@@ -1122,8 +1135,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 			if (!symbol_table) {
 				ZVAL_NULL(&params[4]);
 			} else {
-				ZVAL_NEW_ARR(&params[4]);
-				zend_array_dup(Z_ARRVAL(params[4]), &symbol_table->ht);
+				ZVAL_ARR(&params[4], zend_array_dup(symbol_table));
 			}
 
 			ZVAL_COPY_VALUE(&orig_user_error_handler, &EG(user_error_handler));
@@ -1179,7 +1191,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 			break;
 	}
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_end(args);
 #endif
 
@@ -1196,9 +1208,10 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 }
 /* }}} */
 
-#if (defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__))
+#ifdef HAVE_NORETURN
+# ifdef HAVE_NORETURN_ALIAS
 void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
-#elif defined(ZEND_WIN32) || defined(DARWIN)
+# else
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 {
 	va_list va;
@@ -1217,6 +1230,7 @@ ZEND_API ZEND_NORETURN void zend_error_noreturn(int type, const char *format, ..
 	va_end(va);
 }
 /* }}} */
+# endif
 #endif
 
 ZEND_API void zend_output_debug_string(zend_bool trigger_break, const char *format, ...) /* {{{ */

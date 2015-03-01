@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -669,7 +669,7 @@ finish:
 		zend_set_local_var_str("http_response_header", sizeof("http_response_header")-1, &ztmp, 0);
 	}
 
-	response_header = zend_hash_str_find_ind(&symbol_table->ht, "http_response_header", sizeof("http_response_header")-1);
+	response_header = zend_hash_str_find_ind(symbol_table, "http_response_header", sizeof("http_response_header")-1);
 
 	if (!php_stream_eof(stream)) {
 		size_t tmp_line_len;
@@ -751,7 +751,7 @@ finish:
 			if (!strncasecmp(http_header_line, "Location: ", 10)) {
 				if (context && (tmpzval = php_stream_context_get_option(context, "http", "follow_location")) != NULL) {
 					follow_location = zval_is_true(tmpzval);
-				} else if (!(response_code >= 300 && response_code < 304 || 307 == response_code || 308 == response_code)) {
+				} else if (!((response_code >= 300 && response_code < 304) || 307 == response_code || 308 == response_code)) {
 					/* we shouldn't redirect automatically
 					if follow_location isn't set and response_code not in (300, 301, 302, 303 and 307)
 					see http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.1

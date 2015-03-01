@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -290,7 +290,7 @@ PHP_FUNCTION(sem_get)
 	sem_ptr->count = 0;
 	sem_ptr->auto_release = auto_release;
 
-	ZEND_REGISTER_RESOURCE(return_value, sem_ptr, php_sysvsem_module.le_sem);
+	RETVAL_RES(zend_register_resource(sem_ptr, php_sysvsem_module.le_sem));
 	sem_ptr->id = Z_RES_HANDLE_P(return_value);
 }
 /* }}} */
@@ -314,7 +314,9 @@ static void php_sysvsem_semop(INTERNAL_FUNCTION_PARAMETERS, int acquire)
 		}
 	}
 
-	ZEND_FETCH_RESOURCE(sem_ptr, sysvsem_sem *, arg_id, -1, "SysV semaphore", php_sysvsem_module.le_sem);
+	if ((sem_ptr = (sysvsem_sem *)zend_fetch_resource(Z_RES_P(arg_id), "SysV semaphore", php_sysvsem_module.le_sem)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	if (!acquire && sem_ptr->count == 0) {
 		php_error_docref(NULL, E_WARNING, "SysV semaphore %ld (key 0x%x) is not currently acquired", Z_LVAL_P(arg_id), sem_ptr->key);
@@ -376,7 +378,9 @@ PHP_FUNCTION(sem_remove)
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(sem_ptr, sysvsem_sem *, arg_id, -1, "SysV semaphore", php_sysvsem_module.le_sem);
+	if ((sem_ptr = (sysvsem_sem *)zend_fetch_resource(Z_RES_P(arg_id), "SysV semaphore", php_sysvsem_module.le_sem)) == NULL) {
+		RETURN_FALSE;
+	}
 
 #if HAVE_SEMUN
 	un.buf = &buf;

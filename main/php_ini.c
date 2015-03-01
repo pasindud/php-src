@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -356,6 +356,10 @@ static void php_load_zend_extension_cb(void *arg)
 {
 	char *filename = *((char **) arg);
 	const int length = (int)strlen(filename);
+
+#ifndef PHP_WIN32
+	(void) length;
+#endif
 
 	if (IS_ABSOLUTE_PATH(filename, length)) {
 		zend_load_extension(filename);
@@ -778,16 +782,11 @@ PHPAPI void php_ini_activate_config(HashTable *source_hash, int modify_type, int
 {
 	zend_string *str;
 	zval *data;
-	zend_ulong num_index;
 
 	/* Walk through config hash and alter matching ini entries using the values found in the hash */
-	for (zend_hash_internal_pointer_reset(source_hash);
-		zend_hash_get_current_key(source_hash, &str, &num_index) == HASH_KEY_IS_STRING;
-		zend_hash_move_forward(source_hash)
-	) {
-		data = zend_hash_get_current_data(source_hash);
+	ZEND_HASH_FOREACH_STR_KEY_VAL(source_hash, str, data) {
 		zend_alter_ini_entry_ex(str, Z_STR_P(data), modify_type, stage, 0);
-	}
+	} ZEND_HASH_FOREACH_END();
 }
 /* }}} */
 

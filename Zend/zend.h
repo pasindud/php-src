@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -62,25 +62,25 @@
 
 #ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
 #define ZEND_TSRMG TSRMG_STATIC
-#define ZEND_TSRMLS_CACHE_EXTERN TSRMLS_CACHE_EXTERN
-#define ZEND_TSRMLS_CACHE_DEFINE TSRMLS_CACHE_DEFINE
-#define ZEND_TSRMLS_CACHE_UPDATE TSRMLS_CACHE_UPDATE
+#define ZEND_TSRMLS_CACHE_EXTERN() TSRMLS_CACHE_EXTERN()
+#define ZEND_TSRMLS_CACHE_DEFINE() TSRMLS_CACHE_DEFINE()
+#define ZEND_TSRMLS_CACHE_UPDATE() TSRMLS_CACHE_UPDATE()
 #define ZEND_TSRMLS_CACHE TSRMLS_CACHE
 #else
 #define ZEND_TSRMG TSRMG
-#define ZEND_TSRMLS_CACHE_EXTERN
-#define ZEND_TSRMLS_CACHE_DEFINE
-#define ZEND_TSRMLS_CACHE_UPDATE
+#define ZEND_TSRMLS_CACHE_EXTERN()
+#define ZEND_TSRMLS_CACHE_DEFINE()
+#define ZEND_TSRMLS_CACHE_UPDATE()
 #define ZEND_TSRMLS_CACHE
 #endif
 
-ZEND_TSRMLS_CACHE_EXTERN;
+ZEND_TSRMLS_CACHE_EXTERN();
 
 #ifdef HAVE_NORETURN
-# if defined(ZEND_WIN32)
-ZEND_API ZEND_NORETURN void zend_error_noreturn(int type, const char *format, ...);
-# else
+# ifdef ZEND_NORETRUN_ALIAS
 void zend_error_noreturn(int type, const char *format, ...) ZEND_NORETURN;
+# else
+ZEND_API ZEND_NORETURN void zend_error_noreturn(int type, const char *format, ...);
 # endif
 #else
 # define zend_error_noreturn zend_error

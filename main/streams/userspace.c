@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -503,7 +503,7 @@ PHP_FUNCTION(stream_wrapper_register)
 	uwrap->wrapper.abstract = uwrap;
 	uwrap->wrapper.is_url = ((flags & PHP_STREAM_IS_URL) != 0);
 
-	rsrc = ZEND_REGISTER_RESOURCE(NULL, uwrap, le_protocols);
+	rsrc = zend_register_resource(uwrap, le_protocols);
 
 	if ((uwrap->ce = zend_lookup_class(classname)) != NULL) {
 		if (php_register_url_stream_wrapper_volatile(protocol->val, &uwrap->wrapper) == SUCCESS) {

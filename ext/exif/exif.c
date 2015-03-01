@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -158,7 +158,7 @@ ZEND_DECLARE_MODULE_GLOBALS(exif)
 #ifdef ZTS
 #define EXIF_G(v) ZEND_TSRMG(exif_globals_id, zend_exif_globals *, v)
 #ifdef COMPILE_DL_EXIF
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 #else
 #define EXIF_G(v) (exif_globals.v)
@@ -212,7 +212,7 @@ PHP_INI_END()
 static PHP_GINIT_FUNCTION(exif)
 {
 #if defined(COMPILE_DL_EXIF) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	exif_globals->encode_unicode    = NULL;
 	exif_globals->decode_unicode_be = NULL;
@@ -2695,7 +2695,7 @@ static int exif_process_user_comment(image_info_type *ImageInfo, char **pszInfoP
 static int exif_process_unicode(image_info_type *ImageInfo, xp_field_type *xp_field, int tag, char *szValuePtr, int ByteCount)
 {
 	xp_field->tag = tag;
-
+	xp_field->value = NULL;
 	/* XXX this will fail again if encoding_converter returns on error something different than SIZE_MAX   */
 	if (zend_multibyte_encoding_converter(
 			(unsigned char**)&xp_field->value,

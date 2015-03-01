@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -220,7 +220,7 @@ static zend_object *spl_fixedarray_object_new_ex(zend_class_entry *class_type, z
 	zend_class_entry     *parent = class_type;
 	int                   inherited = 0;
 
-	intern = ecalloc(1, sizeof(spl_fixedarray_object) + (sizeof(zval) * parent->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(spl_fixedarray_object) + zend_object_properties_size(parent));
 
 	zend_object_std_init(&intern->std, class_type);
 	object_properties_init(&intern->std, class_type);

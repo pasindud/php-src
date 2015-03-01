@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | phar php single-file executable PHP extension                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2005-2014 The PHP Group                                |
+  | Copyright (c) 2005-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -3226,7 +3226,7 @@ int phar_flush(phar_archive_data *phar, char *user_stub, zend_long len, int conv
 
 #ifdef COMPILE_DL_PHAR
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(phar)
 #endif
@@ -3337,7 +3337,7 @@ static void mime_type_dtor(zval *zv)
 PHP_GINIT_FUNCTION(phar) /* {{{ */
 {
 #if defined(COMPILE_DL_PHAR) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	phar_mime_type mime;
 

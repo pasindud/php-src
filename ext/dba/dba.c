@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -277,7 +277,9 @@ static size_t php_dba_make_key(zval *key, char **key_str, char **key_free)
 
 
 #define DBA_FETCH_RESOURCE(info, id)	\
-	ZEND_FETCH_RESOURCE2(info, dba_info *, id, -1, "DBA identifier", le_db, le_pdb);
+	if ((info = (dba_info *)zend_fetch_resource2(Z_RES_P(id), "DBA identifier", le_db, le_pdb)) == NULL) { \
+		RETURN_FALSE; \
+	}
 
 #define DBA_ID_GET2   DBA_ID_PARS; DBA_GET2;   DBA_FETCH_RESOURCE(info, id)
 #define DBA_ID_GET2_3 DBA_ID_PARS; DBA_GET2_3; DBA_FETCH_RESOURCE(info, id)
@@ -951,7 +953,7 @@ static void php_dba_open(INTERNAL_FUNCTION_PARAMETERS, int persistent)
 		}
 	}
 
-	ZEND_REGISTER_RESOURCE(return_value, info, (persistent ? le_pdb : le_db));
+	RETVAL_RES(zend_register_resource(info, (persistent ? le_pdb : le_db)));
 	FREENOW;
 }
 /* }}} */

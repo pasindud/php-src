@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -100,7 +100,7 @@ PHPAPI extern char *php_ini_scanned_path;
 PHPAPI extern char *php_ini_scanned_files;
 
 #if defined(PHP_WIN32) && defined(ZTS)
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 
 #ifndef O_BINARY
@@ -201,7 +201,7 @@ static void print_modules(void) /* {{{ */
 
 	zend_hash_init(&sorted_registry, 50, NULL, NULL, 0);
 	zend_hash_copy(&sorted_registry, &module_registry, NULL);
-	zend_hash_sort(&sorted_registry, zend_qsort, module_name_cmp, 0);
+	zend_hash_sort(&sorted_registry, module_name_cmp, 0);
 	zend_hash_apply(&sorted_registry, print_module_info);
 	zend_hash_destroy(&sorted_registry);
 }
@@ -661,7 +661,6 @@ static int do_cli(int argc, char **argv) /* {{{ */
 	int lineno = 0;
 	const char *param_error=NULL;
 	int hide_argv = 0;
-	zend_string *key;
 
 	zend_try {
 
@@ -681,7 +680,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				goto out;
 
 			case 'v': /* show php version & quit */
-				php_printf("PHP %s (%s) (built: %s %s) %s\nCopyright (c) 1997-2014 The PHP Group\n%s",
+				php_printf("PHP %s (%s) (built: %s %s) %s\nCopyright (c) 1997-2015 The PHP Group\n%s",
 					PHP_VERSION, cli_sapi_module.name, __DATE__, __TIME__,
 #if ZEND_DEBUG && defined(HAVE_GCOV)
 					"(DEBUG GCOV)",
@@ -965,9 +964,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 			}
 		}
 
-		key = zend_string_init("_SERVER", sizeof("_SERVER")-1, 0);
-		zend_is_auto_global(key);
-		zend_string_release(key);
+		zend_is_auto_global_str(ZEND_STRL("_SERVER"));
 
 		PG(during_request_startup) = 0;
 		switch (behavior) {
@@ -1036,14 +1033,14 @@ static int do_cli(int argc, char **argv) /* {{{ */
 					exit_status=254;
 				}
 				ZVAL_LONG(&argi, index);
-				zend_hash_str_update(&EG(symbol_table).ht, "argi", sizeof("argi")-1, &argi);
+				zend_hash_str_update(&EG(symbol_table), "argi", sizeof("argi")-1, &argi);
 				while (exit_status == SUCCESS && (input=php_stream_gets(s_in_process, NULL, 0)) != NULL) {
 					len = strlen(input);
 					while (len > 0 && len-- && (input[len]=='\n' || input[len]=='\r')) {
 						input[len] = '\0';
 					}
 					ZVAL_STRINGL(&argn, input, len);
-					zend_hash_str_update(&EG(symbol_table).ht, "argn", sizeof("argn")-1, &argn);
+					zend_hash_str_update(&EG(symbol_table), "argn", sizeof("argn")-1, &argn);
 					Z_LVAL(argi) = ++index;
 					if (exec_run) {
 						if (zend_eval_string_ex(exec_run, NULL, "Command line run code", 1) == FAILURE) {
@@ -1107,10 +1104,10 @@ static int do_cli(int argc, char **argv) /* {{{ */
 					zend_call_method_with_1_params(&ref, pce, &pce->constructor, "__construct", NULL, &arg);
 
 					if (EG(exception)) {
-						zval tmp, *msg;
+						zval tmp, *msg, rv;
 
 						ZVAL_OBJ(&tmp, EG(exception));
-						msg = zend_read_property(zend_exception_get_default(), &tmp, "message", sizeof("message")-1, 0);
+						msg = zend_read_property(zend_exception_get_default(), &tmp, "message", sizeof("message")-1, 0, &rv);
 						zend_printf("Exception: %s\n", Z_STRVAL_P(msg));
 						zval_ptr_dtor(&tmp);
 						EG(exception) = NULL;
@@ -1181,9 +1178,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 int main(int argc, char *argv[])
 #endif
 {
-#ifdef ZTS
-	void ***tsrm_ls;
-#endif
 #ifdef PHP_CLI_WIN32_NO_CONSOLE
 	int argc = __argc;
 	char **argv = __argv;
@@ -1239,8 +1233,8 @@ int main(int argc, char *argv[])
 
 #ifdef ZTS
 	tsrm_startup(1, 1, 0, NULL);
-	tsrm_ls = ts_resource(0);
-	ZEND_TSRMLS_CACHE_UPDATE;
+	(void)ts_resource(0);
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
 #ifdef PHP_WIN32

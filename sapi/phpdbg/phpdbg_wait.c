@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 5                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -28,7 +28,7 @@ static void phpdbg_rebuild_http_globals_array(int type, const char *name) {
 	if (Z_TYPE(PG(http_globals)[type]) != IS_UNDEF) {
 		zval_dtor(&PG(http_globals)[type]);
 	}
-	if ((zvp = zend_hash_str_find(&EG(symbol_table).ht, name, strlen(name)))) {
+	if ((zvp = zend_hash_str_find(&EG(symbol_table), name, strlen(name)))) {
 		Z_ADDREF_P(zvp);
 		PG(http_globals)[type] = *zvp;
 	}
@@ -76,8 +76,8 @@ static void phpdbg_array_intersect_init(phpdbg_intersect_ptr *info, HashTable *h
 	info->ht[0] = ht1;
 	info->ht[1] = ht2;
 
-	zend_hash_sort(info->ht[0], zend_qsort, (compare_func_t) phpdbg_array_data_compare, 0);
-	zend_hash_sort(info->ht[1], zend_qsort, (compare_func_t) phpdbg_array_data_compare, 0);
+	zend_hash_sort(info->ht[0], (compare_func_t) phpdbg_array_data_compare, 0);
+	zend_hash_sort(info->ht[1], (compare_func_t) phpdbg_array_data_compare, 0);
 
 	zend_hash_internal_pointer_reset_ex(info->ht[0], &info->pos[0]);
 	zend_hash_internal_pointer_reset_ex(info->ht[1], &info->pos[1]);
@@ -157,7 +157,7 @@ void phpdbg_webdata_decompress(char *msg, int len) {
 		PG(auto_globals_jit) = 0;
 		zend_hash_apply(CG(auto_globals), (apply_func_t) phpdbg_dearm_autoglobals);
 
-		zend_hash_clean(&EG(symbol_table).ht);
+		zend_hash_clean(&EG(symbol_table));
 		EG(symbol_table) = *Z_ARR_P(zvp);
 
 		/* Rebuild cookies, env vars etc. from GLOBALS (PG(http_globals)) */

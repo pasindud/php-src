@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -520,14 +520,12 @@ PHP_FUNCTION(dom_xpath_register_php_functions)
 
 	if (zend_parse_parameters_ex(ZEND_PARSE_PARAMS_QUIET, ZEND_NUM_ARGS(), "a",  &array_value) == SUCCESS) {
 		intern = Z_XPATHOBJ_P(id);
-		zend_hash_internal_pointer_reset(Z_ARRVAL_P(array_value));
-		while ((entry = zend_hash_get_current_data(Z_ARRVAL_P(array_value)))) {
+		ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(array_value), entry) {
 			zend_string *str = zval_get_string(entry);
 			ZVAL_LONG(&new_string,1);
 			zend_hash_update(intern->registered_phpfunctions, str, &new_string);
-			zend_hash_move_forward(Z_ARRVAL_P(array_value));
 			zend_string_release(str);
-		}
+		} ZEND_HASH_FOREACH_END();
 		intern->registerPhpFunctions = 2;
 		RETURN_TRUE;
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -209,10 +209,14 @@ static zend_always_inline void zend_string_release(zend_string *s)
 	}
 }
 
+
 static zend_always_inline zend_bool zend_string_equals(zend_string *s1, zend_string *s2)
 {
 	return s1 == s2 || (s1->len == s2->len && !memcmp(s1->val, s2->val, s1->len));
 }
+
+#define zend_string_equals_ci(s1, s2) \
+	((s1)->len == (s2)->len && !zend_binary_strcasecmp((s1)->val, (s1)->len, (s2)->val, (s2)->len))
 
 #define zend_string_equals_literal_ci(str, c) \
 	((str)->len == sizeof(c) - 1 && !zend_binary_strcasecmp((str)->val, (str)->len, (c), sizeof(c) - 1))
