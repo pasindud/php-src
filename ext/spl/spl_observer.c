@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -256,7 +256,7 @@ static zend_object *spl_object_storage_new_ex(zend_class_entry *class_type, zval
 	spl_SplObjectStorage *intern;
 	zend_class_entry *parent = class_type;
 
-	intern = emalloc(sizeof(spl_SplObjectStorage) + sizeof(zval) * (parent->default_properties_count - 1));
+	intern = emalloc(sizeof(spl_SplObjectStorage) + zend_object_properties_size(parent));
 	memset(intern, 0, sizeof(spl_SplObjectStorage) - sizeof(zval));
 	intern->pos = INVALID_IDX;
 
@@ -769,8 +769,8 @@ SPL_METHOD(SplObjectStorage, serialize)
 
 	/* members */
 	smart_str_appendl(&buf, "m:", 2);
-	ZVAL_NEW_ARR(&members);
-	zend_array_dup(Z_ARRVAL(members), zend_std_get_properties(getThis()));
+	ZVAL_ARR(&members, zend_array_dup(zend_std_get_properties(getThis())));
+	zend_hash_str_del(Z_ARRVAL(members), "\x00gcdata", sizeof("\x00gcdata") - 1);
 	php_var_serialize(&buf, &members, &var_hash); /* finishes the string */
 	zval_ptr_dtor(&members);
 

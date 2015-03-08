@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -273,9 +273,9 @@ static int spl_autoload(zend_string *class_name, zend_string *lc_name, const cha
 	if (ret == SUCCESS) {
 		zend_string *opened_path;
 		if (!file_handle.opened_path) {
-			file_handle.opened_path = estrndup(class_file, class_file_len);
+			file_handle.opened_path = zend_string_init(class_file, class_file_len, 0);
 		}
-		opened_path = zend_string_init(file_handle.opened_path, strlen(file_handle.opened_path), 0);
+		opened_path = zend_string_copy(file_handle.opened_path);
 		ZVAL_NULL(&dummy);
 		if (zend_hash_add(&EG(included_files), opened_path, &dummy)) {
 			new_op_array = zend_compile_file(&file_handle, ZEND_REQUIRE);

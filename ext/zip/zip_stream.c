@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -160,6 +160,7 @@ static int php_zip_ops_stat(php_stream *stream, php_stream_statbuf *ssb) /* {{{ 
 	if (za) {
 		memset(ssb, 0, sizeof(php_stream_statbuf));
 		if (zip_stat(za, fragment, ZIP_FL_NOCASE, &sb) != 0) {
+			zip_close(za);
 			zend_string_release(file_basename);
 			return -1;
 		}
@@ -253,7 +254,7 @@ php_stream *php_stream_zip_opener(php_stream_wrapper *wrapper,
 											const char *path,
 											const char *mode,
 											int options,
-											char **opened_path,
+											zend_string **opened_path,
 											php_stream_context *context STREAMS_DC)
 {
 	int path_len;
@@ -313,7 +314,7 @@ php_stream *php_stream_zip_opener(php_stream_wrapper *wrapper,
 			stream = php_stream_alloc(&php_stream_zipio_ops, self, NULL, mode);
 
 			if (opened_path) {
-				*opened_path = estrdup(path);
+				*opened_path = zend_string_init(path, strlen(path), 0);
 			}
 		} else {
 			zip_close(za);

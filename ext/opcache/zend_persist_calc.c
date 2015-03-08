@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -150,8 +150,13 @@ static void zend_persist_op_array_calc_ex(zend_op_array *op_array)
 	}
 
 	if (op_array->static_variables) {
-		ADD_DUP_SIZE(op_array->static_variables, sizeof(HashTable));
-		zend_hash_persist_calc(op_array->static_variables, zend_persist_zval_calc);
+		if (!zend_shared_alloc_get_xlat_entry(op_array->static_variables)) {
+			HashTable *old = op_array->static_variables;
+
+			ADD_DUP_SIZE(op_array->static_variables, sizeof(HashTable));
+			zend_hash_persist_calc(op_array->static_variables, zend_persist_zval_calc);
+			zend_shared_alloc_register_xlat_entry(old, op_array->static_variables);
+		}
 	}
 
 	if (zend_shared_alloc_get_xlat_entry(op_array->opcodes)) {
@@ -194,21 +199,27 @@ static void zend_persist_op_array_calc_ex(zend_op_array *op_array)
 	}
 
 	if (op_array->arg_info) {
-		uint32_t i, num_args;
+		zend_arg_info *arg_info = op_array->arg_info;
+		uint32_t num_args = op_array->num_args;
+		uint32_t i;
 
 		num_args = op_array->num_args;
 		if (op_array->fn_flags & ZEND_ACC_VARIADIC) {
 			num_args++;
 		}
+		if (op_array->fn_flags & ZEND_ACC_HAS_RETURN_TYPE) {
+			arg_info--;
+			num_args++;
+		}
 		ADD_DUP_SIZE(op_array->arg_info, sizeof(zend_arg_info) * num_args);
+		ADD_DUP_SIZE(arg_info, sizeof(zend_arg_info) * num_args);
 		for (i = 0; i < num_args; i++) {
-			if (op_array->arg_info[i].name) {
-				ADD_INTERNED_STRING(op_array->arg_info[i].name, 1);
+			if (arg_info[i].name) {
+				ADD_INTERNED_STRING(arg_info[i].name, 1);
 			}
-			if (op_array->arg_info[i].class_name) {
-				ADD_INTERNED_STRING(op_array->arg_info[i].class_name, 1);
+			if (arg_info[i].class_name) {
+				ADD_INTERNED_STRING(arg_info[i].class_name, 1);
 			}
-
 		}
 	}
 
@@ -236,18 +247,35 @@ static void zend_persist_op_array_calc_ex(zend_op_array *op_array)
 
 static void zend_persist_op_array_calc(zval *zv)
 {
-	ADD_ARENA_SIZE(sizeof(zend_op_array));
-	zend_persist_op_array_calc_ex(Z_PTR_P(zv));
+	zend_op_array *op_array = Z_PTR_P(zv);
+
+	if (op_array->type == ZEND_USER_FUNCTION/* &&
+	    (!op_array->refcount || *(op_array->refcount) > 1)*/) {
+		zend_op_array *old_op_array = zend_shared_alloc_get_xlat_entry(op_array);
+		if (old_op_array) {
+			Z_PTR_P(zv) = old_op_array;
+		} else {
+			ADD_ARENA_SIZE(sizeof(zend_op_array));
+			zend_persist_op_array_calc_ex(Z_PTR_P(zv));
+			zend_shared_alloc_register_xlat_entry(op_array, Z_PTR_P(zv));
+		}
+	} else {
+		ADD_ARENA_SIZE(sizeof(zend_op_array));
+		zend_persist_op_array_calc_ex(Z_PTR_P(zv));
+	}
 }
 
 static void zend_persist_property_info_calc(zval *zv)
 {
 	zend_property_info *prop = Z_PTR_P(zv);
 
-	ADD_ARENA_SIZE(sizeof(zend_property_info));
-	ADD_INTERNED_STRING(prop->name, 0);
-	if (ZCG(accel_directives).save_comments && prop->doc_comment) {
-		ADD_STRING(prop->doc_comment);
+	if (!zend_shared_alloc_get_xlat_entry(prop)) {
+		zend_shared_alloc_register_xlat_entry(prop, prop);
+		ADD_ARENA_SIZE(sizeof(zend_property_info));
+		ADD_INTERNED_STRING(prop->name, 0);
+		if (ZCG(accel_directives).save_comments && prop->doc_comment) {
+			ADD_STRING(prop->doc_comment);
+		}
 	}
 }
 
@@ -347,12 +375,24 @@ uint zend_accel_script_persist_calc(zend_persistent_script *new_persistent_scrip
 	ZCG(current_persistent_script) = new_persistent_script;
 
 	ADD_DUP_SIZE(new_persistent_script, sizeof(zend_persistent_script));
-	ADD_DUP_SIZE(key, key_length + 1);
+	if (key) {
+		ADD_DUP_SIZE(key, key_length + 1);
+	}
 	ADD_STRING(new_persistent_script->full_path);
+
+#ifdef __SSE2__
+	/* Align size to 64-byte boundary */
+	new_persistent_script->size = (new_persistent_script->size + 63) & ~63;
+#endif
 
 	zend_accel_persist_class_table_calc(&new_persistent_script->class_table);
 	zend_hash_persist_calc(&new_persistent_script->function_table, zend_persist_op_array_calc);
 	zend_persist_op_array_calc_ex(&new_persistent_script->main_op_array);
+
+#ifdef __SSE2__
+	/* Align size to 64-byte boundary */
+	new_persistent_script->arena_size = (new_persistent_script->arena_size + 63) & ~63;
+#endif
 
 	new_persistent_script->size += new_persistent_script->arena_size;
 

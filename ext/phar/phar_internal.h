@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | phar php single-file executable PHP extension                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2014 The PHP Group                                |
+  | Copyright (c) 2006-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -33,7 +33,7 @@
 #include "zend_hash.h"
 #include "zend_interfaces.h"
 #include "zend_operators.h"
-#include "zend_qsort.h"
+#include "zend_sort.h"
 #include "zend_vm.h"
 #include "zend_smart_str.h"
 #include "main/php_streams.h"
@@ -197,7 +197,7 @@ ZEND_EXTERN_MODULE_GLOBALS(phar)
 #ifdef ZTS
 #	include "TSRM.h"
 #   ifdef COMPILE_DL_PHAR
-ZEND_TSRMLS_CACHE_EXTERN;
+ZEND_TSRMLS_CACHE_EXTERN();
 #   endif
 #	define PHAR_G(v) ZEND_TSRMG(phar_globals_id, zend_phar_globals *, v)
 #	define PHAR_GLOBALS ((zend_phar_globals *) (*((void ***) ZEND_TSRMLS_CACHE))[TSRM_UNSHUFFLE_RSRC_ID(phar_globals_id)])
@@ -495,7 +495,7 @@ union _phar_entry_object {
 #endif
 
 #ifndef PHAR_MAIN
-extern char *(*phar_save_resolve_path)(const char *filename, int filename_len);
+extern zend_string *(*phar_save_resolve_path)(const char *filename, int filename_len);
 #endif
 
 BEGIN_EXTERN_C()
@@ -562,7 +562,7 @@ char *phar_compress_filter(phar_entry_info * entry, int return_unknown);
 void phar_remove_virtual_dirs(phar_archive_data *phar, char *filename, int filename_len);
 void phar_add_virtual_dirs(phar_archive_data *phar, char *filename, int filename_len);
 int phar_mount_entry(phar_archive_data *phar, char *filename, int filename_len, char *path, int path_len);
-char *phar_find_in_include_path(char *file, int file_len, phar_archive_data **pphar);
+zend_string *phar_find_in_include_path(char *file, int file_len, phar_archive_data **pphar);
 char *phar_fix_filepath(char *path, int *new_len, int use_cwd);
 phar_entry_info * phar_open_jit(phar_archive_data *phar, phar_entry_info *entry, char **error);
 int phar_parse_metadata(char **buffer, zval *metadata, int zip_metadata_len);

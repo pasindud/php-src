@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -224,6 +224,13 @@ struct _zend_executor_globals {
 
 	zend_bool active;
 	zend_bool valid_symbol_table;
+
+	zend_long assertions;
+
+	uint32_t           ht_iterators_count;     /* number of allocatd slots */
+	uint32_t           ht_iterators_used;      /* number of used slots */
+	HashTableIterator *ht_iterators;
+	HashTableIterator  ht_iterators_slots[16];
 
 	void *saved_fpu_cw_ptr;
 #if XPFPA_HAVE_CW

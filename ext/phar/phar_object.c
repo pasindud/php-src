@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | phar php single-file executable PHP extension                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2005-2014 The PHP Group                                |
+  | Copyright (c) 2005-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -1399,11 +1399,11 @@ static int phar_build(zend_object_iterator *iter, void *puser) /* {{{ */
 	phar_entry_data *data;
 	php_stream *fp;
 	size_t contents_len;
-	char *fname, *error = NULL, *base = p_obj->b, *opened, *save = NULL, *temp = NULL;
+	char *fname, *error = NULL, *base = p_obj->b, *save = NULL, *temp = NULL;
+	zend_string *opened;
 	char *str_key;
 	zend_class_entry *ce = p_obj->c;
 	phar_archive_object *phar_obj = p_obj->p;
-	char *str = "[stream]";
 
 	value = iter->funcs->get_current_data(iter);
 
@@ -1453,7 +1453,7 @@ static int phar_build(zend_object_iterator *iter, void *puser) /* {{{ */
 			}
 
 			close_fp = 0;
-			opened = (char *) estrndup(str, sizeof("[stream]") - 1);
+			opened = zend_string_init("[stream]", sizeof("[stream]") - 1, 0);
 			goto after_open_fp;
 		case IS_OBJECT:
 			if (instanceof_function(Z_OBJCE_P(value), spl_ce_SplFileInfo)) {
@@ -1638,7 +1638,7 @@ after_open_fp:
 		}
 
 		if (opened) {
-			efree(opened);
+			zend_string_release(opened);
 		}
 
 		if (close_fp) {
@@ -1657,7 +1657,7 @@ after_open_fp:
 		}
 
 		if (opened) {
-			efree(opened);
+			zend_string_release(opened);
 		}
 
 		if (temp) {
@@ -1692,9 +1692,7 @@ after_open_fp:
 		php_stream_close(fp);
 	}
 
-	// TODO: avoid reallocation ???
-	add_assoc_string(p_obj->ret, str_key, opened);
-	efree(opened);
+	add_assoc_str(p_obj->ret, str_key, opened);
 
 	if (save) {
 		efree(save);
@@ -2066,8 +2064,11 @@ static zend_object *phar_rename_archive(phar_archive_data *phar, char *ext, zend
 	}
 
 	oldpath = estrndup(phar->fname, phar->fname_len);
-	oldname = zend_memrchr(phar->fname, '/', phar->fname_len);
-	++oldname;
+	if ((oldname = zend_memrchr(phar->fname, '/', phar->fname_len))) {
+		++oldname;
+	} else {
+		oldname = phar->fname;
+	}
 	oldname_len = strlen(oldname);
 
 	basename = estrndup(oldname, oldname_len);
@@ -2112,8 +2113,8 @@ static zend_object *phar_rename_archive(phar_archive_data *phar, char *ext, zend
 	}
 its_ok:
 	if (SUCCESS == php_stream_stat_path(newpath, &ssb)) {
-		efree(oldpath);
 		zend_throw_exception_ex(spl_ce_BadMethodCallException, 0, "phar \"%s\" exists and must be unlinked prior to conversion", newpath);
+		efree(oldpath);
 		return NULL;
 	}
 	if (!phar->is_data) {
@@ -4199,7 +4200,7 @@ PHP_METHOD(Phar, extractTo)
 	php_stream *fp;
 	php_stream_statbuf ssb;
 	phar_entry_info *entry;
-	char *pathto, *filename, *actual;
+	char *pathto, *filename;
 	size_t pathto_len, filename_len;
 	int ret, i;
 	int nelems;
@@ -4212,7 +4213,7 @@ PHP_METHOD(Phar, extractTo)
 		return;
 	}
 
-	fp = php_stream_open_wrapper(phar_obj->archive->fname, "rb", IGNORE_URL|STREAM_MUST_SEEK, &actual);
+	fp = php_stream_open_wrapper(phar_obj->archive->fname, "rb", IGNORE_URL|STREAM_MUST_SEEK, NULL);
 
 	if (!fp) {
 		zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
@@ -4220,7 +4221,6 @@ PHP_METHOD(Phar, extractTo)
 		return;
 	}
 
-	efree(actual);
 	php_stream_close(fp);
 
 	if (pathto_len < 1) {

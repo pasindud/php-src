@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -105,8 +105,15 @@ typedef struct _zend_fcall_info_cache {
 #define ZEND_ARG_TYPE_INFO(pass_by_ref, name, type_hint, allow_null) { #name, NULL, type_hint, pass_by_ref, allow_null, 0 },
 #define ZEND_ARG_VARIADIC_INFO(pass_by_ref, name) 					 { #name, NULL, 0, pass_by_ref, 0, 1 },
 
+
+#define ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(name, return_reference, required_num_args, type, class_name, allow_null) \
+	static const zend_internal_arg_info name[] = { \
+	   	{ (const char*)(zend_uintptr_t)(required_num_args), class_name, type, return_reference, allow_null, 0 },
+#define ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO(name, type, class_name, allow_null) \
+	ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(name, 0, -1, type, class_name, allow_null)
+
 #define ZEND_BEGIN_ARG_INFO_EX(name, _unused, return_reference, required_num_args)	\
-	static const zend_internal_arg_info name[] = {																		\
+	static const zend_internal_arg_info name[] = { \
 		{ (const char*)(zend_uintptr_t)(required_num_args), NULL, 0, return_reference, 0, 0 },
 #define ZEND_BEGIN_ARG_INFO(name, _unused)	\
 	ZEND_BEGIN_ARG_INFO_EX(name, 0, ZEND_RETURN_VALUE, -1)
@@ -335,7 +342,7 @@ ZEND_API int zend_update_static_property_double(zend_class_entry *scope, const c
 ZEND_API int zend_update_static_property_string(zend_class_entry *scope, const char *name, size_t name_length, const char *value);
 ZEND_API int zend_update_static_property_stringl(zend_class_entry *scope, const char *name, size_t name_length, const char *value, size_t value_length);
 
-ZEND_API zval *zend_read_property(zend_class_entry *scope, zval *object, const char *name, size_t name_length, zend_bool silent);
+ZEND_API zval *zend_read_property(zend_class_entry *scope, zval *object, const char *name, size_t name_length, zend_bool silent, zval *rv);
 
 ZEND_API zval *zend_read_static_property(zend_class_entry *scope, const char *name, size_t name_length, zend_bool silent);
 
@@ -360,7 +367,7 @@ ZEND_API char *zend_get_type_by_const(int type);
 #define object_init(arg)		_object_init((arg) ZEND_FILE_LINE_CC)
 #define object_init_ex(arg, ce)	_object_init_ex((arg), (ce) ZEND_FILE_LINE_CC)
 #define object_and_properties_init(arg, ce, properties)	_object_and_properties_init((arg), (ce), (properties) ZEND_FILE_LINE_CC)
-ZEND_API int _array_init(zval *arg, uint size ZEND_FILE_LINE_DC);
+ZEND_API int _array_init(zval *arg, uint32_t size ZEND_FILE_LINE_DC);
 ZEND_API int _object_init(zval *arg ZEND_FILE_LINE_DC);
 ZEND_API int _object_init_ex(zval *arg, zend_class_entry *ce ZEND_FILE_LINE_DC);
 ZEND_API int _object_and_properties_init(zval *arg, zend_class_entry *ce, HashTable *properties ZEND_FILE_LINE_DC);
@@ -667,7 +674,7 @@ END_EXTERN_C()
 
 /* Fast parameter parsing API */
 
-/* TODO: This API is experemental. It may be changed or removed ???
+/* TODO: This API is experimental. It may be changed or removed ???
  * It should be used only for really often used functions.
  * (Keep the original parsing code and wrap usage with #ifndef FAST_ZPP)
  */

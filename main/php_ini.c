@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -357,6 +357,10 @@ static void php_load_zend_extension_cb(void *arg)
 	char *filename = *((char **) arg);
 	const int length = (int)strlen(filename);
 
+#ifndef PHP_WIN32
+	(void) length;
+#endif
+
 	if (IS_ABSOLUTE_PATH(filename, length)) {
 		zend_load_extension(filename);
 	} else {
@@ -385,6 +389,7 @@ int php_init_config(void)
 	char *open_basedir;
 	int free_ini_search_path = 0;
 	zend_file_handle fh;
+	zend_string *opened_path = NULL;
 
 	zend_hash_init(&configuration_hash, 8, NULL, config_zval_dtor, 1);
 
@@ -551,7 +556,8 @@ int php_init_config(void)
 				if (!((statbuf.st_mode & S_IFMT) == S_IFDIR)) {
 					fh.handle.fp = VCWD_FOPEN(php_ini_file_name, "r");
 					if (fh.handle.fp) {
-						fh.filename = php_ini_opened_path = expand_filepath(php_ini_file_name, NULL);
+						fh.filename = expand_filepath(php_ini_file_name, NULL);
+						opened_path = zend_string_init(fh.filename, strlen(fh.filename), 0);
 					}
 				}
 			}
@@ -562,18 +568,18 @@ int php_init_config(void)
 			const char *fmt = "php-%s.ini";
 			char *ini_fname;
 			spprintf(&ini_fname, 0, fmt, sapi_module.name);
-			fh.handle.fp = php_fopen_with_path(ini_fname, "r", php_ini_search_path, &php_ini_opened_path);
+			fh.handle.fp = php_fopen_with_path(ini_fname, "r", php_ini_search_path, &opened_path);
 			efree(ini_fname);
 			if (fh.handle.fp) {
-				fh.filename = php_ini_opened_path;
+				fh.filename = opened_path->val;
 			}
 		}
 
 		/* If still no ini file found, search for php.ini file in search path */
 		if (!fh.handle.fp) {
-			fh.handle.fp = php_fopen_with_path("php.ini", "r", php_ini_search_path, &php_ini_opened_path);
+			fh.handle.fp = php_fopen_with_path("php.ini", "r", php_ini_search_path, &opened_path);
 			if (fh.handle.fp) {
-				fh.filename = php_ini_opened_path;
+				fh.filename = opened_path->val;
 			}
 		}
 	}
@@ -595,8 +601,8 @@ int php_init_config(void)
 
 			ZVAL_NEW_STR(&tmp, zend_string_init(fh.filename, strlen(fh.filename), 1));
 			zend_hash_str_update(&configuration_hash, "cfg_file_path", sizeof("cfg_file_path")-1, &tmp);
-			if (php_ini_opened_path) {
-				efree(php_ini_opened_path);
+			if (opened_path) {
+				zend_string_release(opened_path);
 			}
 			php_ini_opened_path = zend_strndup(Z_STRVAL(tmp), Z_STRLEN(tmp));
 		}
@@ -778,16 +784,11 @@ PHPAPI void php_ini_activate_config(HashTable *source_hash, int modify_type, int
 {
 	zend_string *str;
 	zval *data;
-	zend_ulong num_index;
 
 	/* Walk through config hash and alter matching ini entries using the values found in the hash */
-	for (zend_hash_internal_pointer_reset(source_hash);
-		zend_hash_get_current_key(source_hash, &str, &num_index) == HASH_KEY_IS_STRING;
-		zend_hash_move_forward(source_hash)
-	) {
-		data = zend_hash_get_current_data(source_hash);
+	ZEND_HASH_FOREACH_STR_KEY_VAL(source_hash, str, data) {
 		zend_alter_ini_entry_ex(str, Z_STR_P(data), modify_type, stage, 0);
-	}
+	} ZEND_HASH_FOREACH_END();
 }
 /* }}} */
 

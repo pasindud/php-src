@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -45,7 +45,7 @@ struct php_user_stream_wrapper {
 	php_stream_wrapper wrapper;
 };
 
-static php_stream *user_wrapper_opener(php_stream_wrapper *wrapper, const char *filename, const char *mode, int options, char **opened_path, php_stream_context *context STREAMS_DC);
+static php_stream *user_wrapper_opener(php_stream_wrapper *wrapper, const char *filename, const char *mode, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 static int user_wrapper_stat_url(php_stream_wrapper *wrapper, const char *url, int flags, php_stream_statbuf *ssb, php_stream_context *context);
 static int user_wrapper_unlink(php_stream_wrapper *wrapper, const char *url, int options, php_stream_context *context);
 static int user_wrapper_rename(php_stream_wrapper *wrapper, const char *url_from, const char *url_to, int options, php_stream_context *context);
@@ -53,7 +53,7 @@ static int user_wrapper_mkdir(php_stream_wrapper *wrapper, const char *url, int 
 static int user_wrapper_rmdir(php_stream_wrapper *wrapper, const char *url, int options, php_stream_context *context);
 static int user_wrapper_metadata(php_stream_wrapper *wrapper, const char *url, int option, void *value, php_stream_context *context);
 static php_stream *user_wrapper_opendir(php_stream_wrapper *wrapper, const char *filename, const char *mode,
-		int options, char **opened_path, php_stream_context *context STREAMS_DC);
+		int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 
 static php_stream_wrapper_ops user_stream_wops = {
 	user_wrapper_opener,
@@ -325,7 +325,7 @@ static void user_stream_create_object(struct php_user_stream_wrapper *uwrap, php
 }
 
 static php_stream *user_wrapper_opener(php_stream_wrapper *wrapper, const char *filename, const char *mode,
-									   int options, char **opened_path, php_stream_context *context STREAMS_DC)
+									   int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	struct php_user_stream_wrapper *uwrap = (struct php_user_stream_wrapper*)wrapper->abstract;
 	php_userstream_data_t *us;
@@ -385,7 +385,7 @@ static php_stream *user_wrapper_opener(php_stream_wrapper *wrapper, const char *
 
 		/* if the opened path is set, copy it out */
 		if (Z_ISREF(args[3]) && Z_TYPE_P(Z_REFVAL(args[3])) == IS_STRING && opened_path) {
-			*opened_path = estrndup(Z_STRVAL_P(Z_REFVAL(args[3])), Z_STRLEN_P(Z_REFVAL(args[3])));
+			*opened_path = zend_string_copy(Z_STR_P(Z_REFVAL(args[3])));
 		}
 
 		/* set wrapper data to be a reference to our object */
@@ -415,7 +415,7 @@ static php_stream *user_wrapper_opener(php_stream_wrapper *wrapper, const char *
 }
 
 static php_stream *user_wrapper_opendir(php_stream_wrapper *wrapper, const char *filename, const char *mode,
-		int options, char **opened_path, php_stream_context *context STREAMS_DC)
+		int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	struct php_user_stream_wrapper *uwrap = (struct php_user_stream_wrapper*)wrapper->abstract;
 	php_userstream_data_t *us;
@@ -503,7 +503,7 @@ PHP_FUNCTION(stream_wrapper_register)
 	uwrap->wrapper.abstract = uwrap;
 	uwrap->wrapper.is_url = ((flags & PHP_STREAM_IS_URL) != 0);
 
-	rsrc = ZEND_REGISTER_RESOURCE(NULL, uwrap, le_protocols);
+	rsrc = zend_register_resource(uwrap, le_protocols);
 
 	if ((uwrap->ce = zend_lookup_class(classname)) != NULL) {
 		if (php_register_url_stream_wrapper_volatile(protocol->val, &uwrap->wrapper) == SUCCESS) {

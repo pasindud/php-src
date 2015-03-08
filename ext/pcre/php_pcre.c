@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -132,9 +132,18 @@ PHP_INI_END()
 /* {{{ PHP_MINFO_FUNCTION(pcre) */
 static PHP_MINFO_FUNCTION(pcre)
 {
+	int jit_yes = 0;
+
 	php_info_print_table_start();
 	php_info_print_table_row(2, "PCRE (Perl Compatible Regular Expressions) Support", "enabled" );
 	php_info_print_table_row(2, "PCRE Library Version", pcre_version() );
+
+	if (!pcre_config(PCRE_CONFIG_JIT, &jit_yes)) {
+		php_info_print_table_row(2, "PCRE JIT Support", jit_yes ? "enabled" : "disabled");
+	} else {
+		php_info_print_table_row(2, "PCRE JIT Support", "unknown" );
+	}
+
 	php_info_print_table_end();
 
 	DISPLAY_INI_ENTRIES();
@@ -986,91 +995,10 @@ static zend_string *preg_do_repl_func(zval *function, char *subject, int *offset
 }
 /* }}} */
 
-/* {{{ preg_do_eval
- */
-static zend_string *preg_do_eval(char *eval_str, int eval_str_len, char *subject,
-						int *offsets, int count)
-{
-	zval		 retval;			/* Return value from evaluation */
-	char		*eval_str_end,		/* End of eval string */
-				*match,				/* Current match for a backref */
-				*walk,				/* Used to walk the code string */
-				*segment,			/* Start of segment to append while walking */
-				 walk_last;			/* Last walked character */
-	int			 match_len;			/* Length of the match */
-	int			 backref;			/* Current backref */
-	zend_string *esc_match;			/* Quote-escaped match */
-	zend_string *result_str;
-	char        *compiled_string_description;
-	smart_str    code = {0};
-
-	eval_str_end = eval_str + eval_str_len;
-	walk = segment = eval_str;
-	walk_last = 0;
-
-	while (walk < eval_str_end) {
-		/* If found a backreference.. */
-		if ('\\' == *walk || '$' == *walk) {
-			smart_str_appendl(&code, segment, walk - segment);
-			if (walk_last == '\\') {
-				code.s->val[code.s->len-1] = *walk++;
-				segment = walk;
-				walk_last = 0;
-				continue;
-			}
-			segment = walk;
-			if (preg_get_backref(&walk, &backref)) {
-				if (backref < count) {
-					/* Find the corresponding string match and substitute it
-					   in instead of the backref */
-					match = subject + offsets[backref<<1];
-					match_len = offsets[(backref<<1)+1] - offsets[backref<<1];
-					if (match_len) {
-						esc_match = php_addslashes(match, match_len, 0);
-					} else {
-						esc_match = zend_string_init(match, match_len, 0);
-					}
-				} else {
-					esc_match = STR_EMPTY_ALLOC();
-				}
-				smart_str_appendl(&code, esc_match->val, esc_match->len);
-
-				segment = walk;
-
-				/* Clean up and reassign */
-				zend_string_release(esc_match);
-				continue;
-			}
-		}
-		walk++;
-		walk_last = walk[-1];
-	}
-	smart_str_appendl(&code, segment, walk - segment);
-	smart_str_0(&code);
-
-	compiled_string_description = zend_make_compiled_string_description("regexp code");
-	/* Run the code */
-	if (zend_eval_stringl(code.s->val, code.s->len, &retval, compiled_string_description) == FAILURE) {
-		efree(compiled_string_description);
-		php_error_docref(NULL,E_ERROR, "Failed evaluating code: %s%s", PHP_EOL, code.s->val);
-		/* zend_error() does not return in this case */
-	}
-	efree(compiled_string_description);
-
-	/* Save the return string */
-	result_str = zval_get_string(&retval);
-
-	/* Clean up */
-	zval_dtor(&retval);
-	smart_str_free(&code);
-
-	return result_str;
-}
-/* }}} */
-
 /* {{{ php_pcre_replace
  */
 PHPAPI zend_string *php_pcre_replace(zend_string *regex,
+							  zend_string *subject_str,
 							  char *subject, int subject_len,
 							  zval *replace_val, int is_callable_replace,
 							  int limit, int *replace_count)
@@ -1082,13 +1010,13 @@ PHPAPI zend_string *php_pcre_replace(zend_string *regex,
 		return NULL;
 	}
 
-	return php_pcre_replace_impl(pce, subject, subject_len, replace_val,
+	return php_pcre_replace_impl(pce, subject_str, subject, subject_len, replace_val,
 		is_callable_replace, limit, replace_count);
 }
 /* }}} */
 
 /* {{{ php_pcre_replace_impl() */
-PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, int subject_len, zval *replace_val,
+PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, zend_string *subject_str, char *subject, int subject_len, zval *replace_val,
 	int is_callable_replace, int limit, int *replace_count)
 {
 	pcre_extra		*extra = pce->extra;/* Holds results of studying */
@@ -1103,7 +1031,6 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 	int				 alloc_len;			/* Actual allocated length */
 	int				 match_len;			/* Length of the current match */
 	int				 backref;			/* Backreference number */
-	int				 eval;				/* If the replacement string should be eval'ed */
 	int				 start_offset;		/* Where the new search starts */
 	int				 g_notempty=0;		/* If the match should not be empty */
 	int				 replace_len=0;		/* Length of replacement string */
@@ -1117,7 +1044,7 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 	int				 result_len; 		/* Length of result */
 	unsigned char   *mark = NULL;       /* Target for MARK name */
 	zend_string		*result;			/* Result of replacement */
-	zend_string     *eval_result=NULL;  /* Result of eval or custom function */
+	zend_string     *eval_result=NULL;  /* Result of custom function */
 	ALLOCA_FLAG(use_heap);
 
 	if (extra == NULL) {
@@ -1127,20 +1054,14 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 	extra->match_limit = (unsigned long)PCRE_G(backtrack_limit);
 	extra->match_limit_recursion = (unsigned long)PCRE_G(recursion_limit);
 
-	eval = pce->preg_options & PREG_REPLACE_EVAL;
-	if (is_callable_replace) {
-		if (eval) {
-			php_error_docref(NULL, E_WARNING, "Modifier /e cannot be used with replacement callback");
-			return NULL;
-		}
-	} else {
+	if (pce->preg_options & PREG_REPLACE_EVAL) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "The /e modifier is no longer supported, use preg_replace_callback instead");
+		return NULL;
+	}
+	if (!is_callable_replace) {
 		replace = Z_STRVAL_P(replace_val);
 		replace_len = (int)Z_STRLEN_P(replace_val);
 		replace_end = replace + replace_len;
-	}
-
-	if (eval) {
-		php_error_docref(NULL, E_DEPRECATED, "The /e modifier is deprecated, use preg_replace_callback instead");
 	}
 
 	/* Calculate the size of the offsets array, and allocate memory for it. */
@@ -1164,8 +1085,8 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 		}
 	}
 
-	alloc_len = 2 * subject_len;
-	result = zend_string_alloc(alloc_len * sizeof(char), 0);
+	alloc_len = 0;
+	result = NULL;
 
 	/* Initialize */
 	match = NULL;
@@ -1201,13 +1122,8 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 			match = subject + offsets[0];
 
 			new_len = result_len + offsets[0] - start_offset; /* part before the match */
-
-			/* If evaluating, do it and add the return string's length */
-			if (eval) {
-				eval_result = preg_do_eval(replace, replace_len, subject,
-											   offsets, count);
-				new_len += (int)eval_result->len;
-			} else if (is_callable_replace) {
+			
+			if (is_callable_replace) {
 				/* Use custom function to get replacement string and its length. */
 				eval_result = preg_do_repl_func(replace_val, subject, offsets, subpat_names, count, mark);
 				new_len += (int)eval_result->len;
@@ -1233,9 +1149,17 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 				}
 			}
 
-			if (new_len > alloc_len) {
-				alloc_len = alloc_len + 2 * new_len;
-				result = zend_string_realloc(result, alloc_len, 0);
+			if (new_len >= alloc_len) {
+				if (alloc_len == 0) {
+					alloc_len = 2 * subject_len;
+					if (new_len >= alloc_len) {
+						alloc_len = alloc_len + 2 * new_len;
+					}
+					result = zend_string_alloc(alloc_len, 0);
+				} else {
+					alloc_len = alloc_len + 2 * new_len;
+					result = zend_string_realloc(result, alloc_len, 0);
+				}
 			}
 			/* copy the part of the string before the match */
 			memcpy(&result->val[result_len], piece, match-piece);
@@ -1243,10 +1167,9 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 
 			/* copy replacement and backrefs */
 			walkbuf = result->val + result_len;
-
-			/* If evaluating or using custom function, copy result to the buffer
-			 * and clean up. */
-			if (eval || is_callable_replace) {
+			
+			/* If using custom function, copy result to the buffer and clean up. */
+			if (is_callable_replace) {
 				memcpy(walkbuf, eval_result->val, eval_result->len);
 				result_len += (int)eval_result->len;
 				if (eval_result) zend_string_release(eval_result);
@@ -1291,21 +1214,32 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 				memcpy(&result->val[result_len], piece, 1);
 				result_len++;
 			} else {
+				if (!result && subject_str) {
+					result = zend_string_copy(subject_str);
+					break;
+				}
 				new_len = result_len + subject_len - start_offset;
 				if (new_len > alloc_len) {
 					alloc_len = new_len; /* now we know exactly how long it is */
-					result = zend_string_realloc(result, alloc_len, 0);
+					if (NULL != result) {
+						result = zend_string_realloc(result, alloc_len, 0);
+					} else {
+						result = zend_string_alloc(alloc_len, 0);
+					}
 				}
 				/* stick that last bit of string on our output */
 				memcpy(&result->val[result_len], piece, subject_len - start_offset);
 				result_len += subject_len - start_offset;
 				result->val[result_len] = '\0';
+				result->len = result_len;
 				break;
 			}
 		} else {
 			pcre_handle_exec_error(count);
-			zend_string_free(result);
-			result = NULL;
+			if (result) {
+				zend_string_free(result);
+				result = NULL;
+			}
 			break;
 		}
 
@@ -1319,9 +1253,6 @@ PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, char *subject, 
 		start_offset = offsets[1];
 	}
 
-	if (result) {
-		result->len = result_len;
-	}
 	if (size_offsets <= 32) {
 		free_alloca(offsets, use_heap);
 	} else {
@@ -1386,6 +1317,7 @@ static zend_string *php_replace_in_subject(zval *regex, zval *replace, zval *sub
 			/* Do the actual replacement and put the result back into subject_str
 			   for further replacements. */
 			if ((result = php_pcre_replace(regex_str,
+										   subject_str,
 										   subject_str->val,
 										   (int)subject_str->len,
 										   replace_value,
@@ -1406,6 +1338,7 @@ static zend_string *php_replace_in_subject(zval *regex, zval *replace, zval *sub
 		return subject_str;
 	} else {
 		result = php_pcre_replace(Z_STR_P(regex),
+								  subject_str,
 								  subject_str->val,
 								  (int)subject_str->len,
 								  replace,

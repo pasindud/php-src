@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -162,8 +162,8 @@ PHPAPI ZEND_EXTERN_MODULE_GLOBALS(output);
 #define PHPWRITE(str, str_len)		php_output_write((str), (str_len))
 #define PHPWRITE_H(str, str_len)	php_output_write_unbuffered((str), (str_len))
 
-#define PUTC(c)						(php_output_write(&(c), 1), (c))
-#define PUTC_H(c)					(php_output_write_unbuffered(&(c), 1), (c))
+#define PUTC(c)						(php_output_write((const char *) &(c), 1), (c))
+#define PUTC_H(c)					(php_output_write_unbuffered((const char *) &(c), 1), (c))
 
 #define PUTS(str)					do {				\
 	const char *__str = (str);							\

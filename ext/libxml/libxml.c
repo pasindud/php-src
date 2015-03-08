@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -80,7 +80,7 @@ static zend_class_entry *libxmlerror_class_entry;
 /* {{{ dynamically loadable module stuff */
 #ifdef COMPILE_DL_LIBXML
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(libxml)
 #endif /* COMPILE_DL_LIBXML */
@@ -272,7 +272,7 @@ static void php_libxml_node_free_list(xmlNodePtr node)
 static PHP_GINIT_FUNCTION(libxml)
 {
 #if defined(COMPILE_DL_LIBXML) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	ZVAL_UNDEF(&libxml_globals->stream_context);
 	libxml_globals->error_buffer.s = NULL;
@@ -752,7 +752,7 @@ PHP_LIBXML_API void php_libxml_shutdown(void)
 #if defined(LIBXML_SCHEMAS_ENABLED)
 		xmlRelaxNGCleanupTypes();
 #endif
-		xmlCleanupParser();
+		/* xmlCleanupParser(); */
 		zend_hash_destroy(&php_libxml_exports);
 
 		xmlSetExternalEntityLoader(_php_libxml_default_entity_loader);
@@ -860,6 +860,12 @@ static PHP_RINIT_FUNCTION(libxml)
 		xmlSetGenericErrorFunc(NULL, php_libxml_error_handler);
 		xmlParserInputBufferCreateFilenameDefault(php_libxml_input_buffer_create_filename);
 		xmlOutputBufferCreateFilenameDefault(php_libxml_output_buffer_create_filename);
+
+		/* Enable the entity loader by default. This ensures that
+		 * other threads/requests that might have disabled the loader
+		 * do not affect the current request.
+		 */
+		LIBXML(entity_loader_disabled) = 0;
 	}
 	return SUCCESS;
 }

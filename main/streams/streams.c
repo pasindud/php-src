@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -123,28 +123,21 @@ PHPAPI int php_stream_from_persistent_id(const char *persistent_id, php_stream *
 	if ((le = zend_hash_str_find_ptr(&EG(persistent_list), persistent_id, strlen(persistent_id))) != NULL) {
 		if (le->type == le_pstream) {
 			if (stream) {
-				HashPosition pos;
-				zend_resource *regentry;
+				zend_resource *regentry = NULL;
 
 				/* see if this persistent resource already has been loaded to the
 				 * regular list; allowing the same resource in several entries in the
 				 * regular list causes trouble (see bug #54623) */
-				zend_hash_internal_pointer_reset_ex(&EG(regular_list), &pos);
-				while ((regentry = zend_hash_get_current_data_ptr_ex(&EG(regular_list), &pos)) != NULL) {
-					if (regentry->ptr == le->ptr) {
-						break;
-					}
-					zend_hash_move_forward_ex(&EG(regular_list), &pos);
-				}
-
 				*stream = (php_stream*)le->ptr;
-				if (!regentry) { /* not found in regular list */
-					GC_REFCOUNT(le)++;
-					(*stream)->res = ZEND_REGISTER_RESOURCE(NULL, *stream, le_pstream);
-				} else {
-					GC_REFCOUNT(regentry)++;
-					(*stream)->res = regentry;
-				}
+				ZEND_HASH_FOREACH_PTR(&EG(regular_list), regentry) {
+					if (regentry->ptr == le->ptr) {
+						GC_REFCOUNT(regentry)++;
+						(*stream)->res = regentry;
+						return PHP_STREAM_PERSISTENT_SUCCESS;
+					}
+				} ZEND_HASH_FOREACH_END();
+				GC_REFCOUNT(le)++;
+				(*stream)->res = zend_register_resource(*stream, le_pstream);
 			}
 			return PHP_STREAM_PERSISTENT_SUCCESS;
 		}
@@ -325,7 +318,7 @@ fprintf(stderr, "stream_alloc: %s:%p persistent=%s\n", ops->label, ret, persiste
 		}
 	}
 
-	ret->res = ZEND_REGISTER_RESOURCE(NULL, ret, persistent_id ? le_pstream : le_stream);
+	ret->res = zend_register_resource(ret, persistent_id ? le_pstream : le_stream);
 	strlcpy(ret->mode, mode, sizeof(ret->mode));
 
 	ret->wrapper          = NULL;
@@ -572,7 +565,7 @@ fprintf(stderr, "stream_free: %s:%p[%s] preserve_handle=%d release_cast=%d remov
 
 /* {{{ generic stream operations */
 
-static void php_stream_fill_read_buffer(php_stream *stream, size_t size)
+PHPAPI void _php_stream_fill_read_buffer(php_stream *stream, size_t size)
 {
 	/* allocate/fill the buffer */
 
@@ -1836,7 +1829,9 @@ PHPAPI php_stream_wrapper *php_stream_locate_url_wrapper(const char *path, const
 				if (localhost == 1) {
 					(*path_for_open) += 11;
 				}
-				while (*(++*path_for_open)=='/');
+				while (*(++*path_for_open)=='/') {
+					/* intentionally empty */
+				}
 #ifdef PHP_WIN32
 				if (*(*path_for_open + 1) != ':')
 #endif
@@ -2022,13 +2017,13 @@ PHPAPI php_stream_dirent *_php_stream_readdir(php_stream *dirstream, php_stream_
 
 /* {{{ php_stream_open_wrapper_ex */
 PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mode, int options,
-		char **opened_path, php_stream_context *context STREAMS_DC)
+		zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	php_stream *stream = NULL;
 	php_stream_wrapper *wrapper = NULL;
 	const char *path_to_open;
 	int persistent = options & STREAM_OPEN_PERSISTENT;
-	char *resolved_path = NULL;
+	zend_string *resolved_path = NULL;
 	char *copy_of_path = NULL;
 
 	if (opened_path) {
@@ -2043,7 +2038,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	if (options & USE_PATH) {
 		resolved_path = zend_resolve_path(path, (int)strlen(path));
 		if (resolved_path) {
-			path = resolved_path;
+			path = resolved_path->val;
 			/* we've found this file, don't re-check include_path or run realpath */
 			options |= STREAM_ASSUME_REALPATH;
 			options &= ~USE_PATH;
@@ -2056,7 +2051,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	if (options & STREAM_USE_URL && (!wrapper || !wrapper->is_url)) {
 		php_error_docref(NULL, E_WARNING, "This function may only be used against URLs");
 		if (resolved_path) {
-			efree(resolved_path);
+			zend_string_release(resolved_path);
 		}
 		return NULL;
 	}
@@ -2109,7 +2104,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 						? PHP_STREAM_PREFER_STDIO : PHP_STREAM_NO_PREFERENCE)) {
 			case PHP_STREAM_UNCHANGED:
 				if (resolved_path) {
-					efree(resolved_path);
+					zend_string_release(resolved_path);
 				}
 				return stream;
 			case PHP_STREAM_RELEASED:
@@ -2118,7 +2113,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 				}
 				newstream->orig_path = pestrdup(path, persistent);
 				if (resolved_path) {
-					efree(resolved_path);
+					zend_string_release(resolved_path);
 				}
 				return newstream;
 			default:
@@ -2148,7 +2143,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	if (stream == NULL && (options & REPORT_ERRORS)) {
 		php_stream_display_wrapper_errors(wrapper, path, "failed to open stream");
 		if (opened_path && *opened_path) {
-			efree(*opened_path);
+			zend_string_release(*opened_path);
 			*opened_path = NULL;
 		}
 	}
@@ -2159,7 +2154,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	}
 #endif
 	if (resolved_path) {
-		efree(resolved_path);
+		zend_string_release(resolved_path);
 	}
 	return stream;
 }
@@ -2211,7 +2206,7 @@ PHPAPI php_stream_context *php_stream_context_alloc(void)
 	context->notifier = NULL;
 	array_init(&context->options);
 
-	context->res = ZEND_REGISTER_RESOURCE(NULL, context, php_le_stream_context());
+	context->res = zend_register_resource(context, php_le_stream_context());
 	return context;
 }
 

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -60,12 +60,6 @@ ZEND_END_MODULE_GLOBALS(pdo)
 
 #define REGISTER_PDO_CLASS_CONST_LONG(const_name, value) \
 	zend_declare_class_constant_long(php_pdo_get_dbh_ce(), const_name, sizeof(const_name)-1, (zend_long)value);
-
-#define REGISTER_PDO_CONST_LONG(const_name, value) { \
-	zend_class_entry **pce;	\
-	if (zend_hash_find(CG(class_table), "pdo", sizeof("pdo"), (void **) &pce) != FAILURE)	\
-		zend_declare_class_constant_long(*pce, const_name, sizeof(const_name)-1, (zend_long)value);	\
-}	\
 
 #define REGISTER_PDO_CLASS_CONST_STRING(const_name, value) \
 	zend_declare_class_constant_stringl(php_pdo_get_dbh_ce(), const_name, sizeof(const_name)-1, value, sizeof(value)-1);

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -161,6 +161,7 @@ typedef struct _zend_persistent_script {
 	int            ping_auto_globals_mask; /* which autoglobals are used by the script */
 	accel_time_t   timestamp;              /* the script modification time */
 	zend_bool      corrupted;
+	zend_bool      is_phar;
 
 	void          *mem;                    /* shared memory area used by script structures */
 	size_t         size;                   /* size of used shared memory */
@@ -226,12 +227,14 @@ typedef struct _zend_accel_globals {
 	zend_bool               locked;    /* thread obtained exclusive lock */
 	HashTable               bind_hash; /* prototype and zval lookup table */
 	zend_accel_directives   accel_directives;
-	char                   *cwd;              /* current working directory or NULL */
-	int                     cwd_len;          /* "cwd" string length */
-	char                   *include_path_key; /* one letter key of current "include_path" */
-	char                   *include_path;     /* current section of "include_path" directive */
-	int                     include_path_len; /* "include_path" string length */
+	zend_string            *cwd;                  /* current working directory or NULL */
+	zend_string            *include_path;         /* current value of "include_path" directive */
+	char                    include_path_key[32]; /* key of current "include_path" */
+	char                    cwd_key[32];          /* key of current working directory */
+	int                     include_path_key_len;
 	int                     include_path_check;
+	int                     cwd_key_len;
+	int                     cwd_check;
 	int                     auto_globals_mask;
 	time_t                  request_time;
 	/* preallocated shared-memory block to save current script */
@@ -255,7 +258,6 @@ typedef struct _zend_accel_shared_globals {
 	zend_ulong   hash_restarts;    /* number of restarts because of hash overflow */
 	zend_ulong   manual_restarts;  /* number of restarts scheduled by opcache_reset() */
 	zend_accel_hash hash;             /* hash table for cached scripts */
-	zend_accel_hash include_paths;    /* used "include_path" values    */
 
 	/* Directives & Maintenance */
 	time_t          start_time;
@@ -287,7 +289,7 @@ extern zend_accel_shared_globals *accel_shared_globals;
 # define ZCG(v)	ZEND_TSRMG(accel_globals_id, zend_accel_globals *, v)
 extern int accel_globals_id;
 # ifdef COMPILE_DL_OPCACHE
-ZEND_TSRMLS_CACHE_EXTERN;
+ZEND_TSRMLS_CACHE_EXTERN();
 # endif
 #else
 # define ZCG(v) (accel_globals.v)
@@ -305,7 +307,7 @@ int  zend_accel_script_optimize(zend_persistent_script *persistent_script);
 int  accelerator_shm_read_lock(void);
 void accelerator_shm_read_unlock(void);
 
-char *accel_make_persistent_key_ex(zend_file_handle *file_handle, int path_length, int *key_len);
+char *accel_make_persistent_key(const char *path, int path_length, int *key_len);
 zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type);
 
 #if !defined(ZEND_DECLARE_INHERITED_CLASS_DELAYED)

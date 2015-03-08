@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -143,7 +143,7 @@ static zend_object *spl_filesystem_object_new_ex(zend_class_entry *class_type)
 {
 	spl_filesystem_object *intern;
 
-	intern = ecalloc(1, sizeof(spl_filesystem_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(spl_filesystem_object) + zend_object_properties_size(class_type));
 	/* intern->type = SPL_FS_INFO; done by set 0 */
 	intern->file_class = spl_ce_SplFileObject;
 	intern->info_class = spl_ce_SplFileInfo;
@@ -192,18 +192,21 @@ static inline void spl_filesystem_object_get_file_name(spl_filesystem_object *in
 {
 	char slash = SPL_HAS_FLAG(intern->flags, SPL_FILE_DIR_UNIXPATHS) ? '/' : DEFAULT_SLASH;
 
-	if (!intern->file_name) {
-		switch (intern->type) {
+	switch (intern->type) {
 		case SPL_FS_INFO:
 		case SPL_FS_FILE:
-			php_error_docref(NULL, E_ERROR, "Object not initialized");
+			if (!intern->file_name) {
+				php_error_docref(NULL, E_ERROR, "Object not initialized");
+			}
 			break;
 		case SPL_FS_DIR:
+			if (intern->file_name) {
+				efree(intern->file_name);
+			}
 			intern->file_name_len = (int)spprintf(&intern->file_name, 0, "%s%c%s",
 			                                 spl_filesystem_object_get_path(intern, NULL),
 			                                 slash, intern->u.dir.entry.d_name);
 			break;
-		}
 	}
 } /* }}} */
 
@@ -588,9 +591,7 @@ static HashTable *spl_filesystem_object_get_debug_info(zval *object, int *is_tem
 		rebuild_object_properties(&intern->std);
 	}
 
-	ALLOC_HASHTABLE(rv);
-
-	zend_array_dup(rv, intern->std.properties);
+	rv = zend_array_dup(intern->std.properties);
 
 	pnstr = spl_gen_private_prop_name(spl_ce_SplFileInfo, "pathName", sizeof("pathName")-1);
 	path = spl_filesystem_object_get_pathname(intern, &path_len);
@@ -963,7 +964,6 @@ SPL_METHOD(DirectoryIterator, getExtension)
 
 	p = zend_memrchr(fname->val, '.', fname->len);
 	if (p) {
-		assert(p > fname->val);
 		idx = (int)(p - fname->val);
 		RETVAL_STRINGL(fname->val + idx + 1, fname->len - idx - 1);
 		zend_string_release(fname);
@@ -2080,7 +2080,10 @@ static int spl_filesystem_file_call(spl_filesystem_object *intern, zend_function
 		params[1] = *arg2;
 	}
 
-	zend_get_parameters_array_ex(pass_num_args, params + (arg2 ? 2 : 1));
+	if (zend_get_parameters_array_ex(pass_num_args, params + (arg2 ? 2 : 1)) != SUCCESS) {
+		efree(params);
+		WRONG_PARAM_COUNT_WITH_RETVAL(FAILURE);
+	}
 
 	ZVAL_UNDEF(&retval);
 

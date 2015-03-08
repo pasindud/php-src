@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -328,7 +328,8 @@ continue_jmp_ex_optimization:
 							   op->opcode == ZEND_RETURN ||
 							   op->opcode == ZEND_RETURN_BY_REF ||
 							   op->opcode == ZEND_FAST_RET ||
-							   op->opcode == ZEND_FE_FETCH ||
+							   op->opcode == ZEND_FE_FETCH_R ||
+							   op->opcode == ZEND_FE_FETCH_RW ||
 							   op->opcode == ZEND_EXIT) {
 								break;
 							}
@@ -363,7 +364,8 @@ continue_jmp_ex_optimization:
 							   op->opcode == ZEND_RETURN ||
 							   op->opcode == ZEND_RETURN_BY_REF ||
 							   op->opcode == ZEND_FAST_RET ||
-							   op->opcode == ZEND_FE_FETCH ||
+							   op->opcode == ZEND_FE_FETCH_R ||
+							   op->opcode == ZEND_FE_FETCH_RW ||
 							   op->opcode == ZEND_EXIT) {
 								break;
 							}

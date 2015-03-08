@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -341,7 +341,9 @@ typedef enum {
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "r", &mcryptind) == FAILURE) {			\
 		return;																\
 	}																						\
-	ZEND_FETCH_RESOURCE (pm, php_mcrypt *, mcryptind, -1, "MCrypt", le_mcrypt);
+	if ((pm = (php_mcrypt *)zend_fetch_resource(Z_RES_P(mcryptind), "MCrypt", le_mcrypt)) == NULL) { \
+		RETURN_FALSE; \
+	}
 
 #define MCRYPT_GET_MODE_DIR_ARGS(DIRECTORY)								\
 	char *dir = NULL;                                                   \
@@ -533,7 +535,7 @@ PHP_FUNCTION(mcrypt_module_open)
 		pm = emalloc(sizeof(php_mcrypt));
 		pm->td = td;
 		pm->init = 0;
-		ZEND_REGISTER_RESOURCE(return_value, pm, le_mcrypt);
+		RETURN_RES(zend_register_resource(pm, le_mcrypt));
 	}
 }
 /* }}} */
@@ -554,7 +556,9 @@ PHP_FUNCTION(mcrypt_generic_init)
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(pm, php_mcrypt *, mcryptind, -1, "MCrypt", le_mcrypt);
+	if ((pm = (php_mcrypt *)zend_fetch_resource(Z_RES_P(mcryptind), "MCrypt", le_mcrypt)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	max_key_size = mcrypt_enc_get_key_size(pm->td);
 	iv_size = mcrypt_enc_get_iv_size(pm->td);
@@ -629,7 +633,9 @@ PHP_FUNCTION(mcrypt_generic)
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(pm, php_mcrypt *, mcryptind, -1, "MCrypt", le_mcrypt);
+	if ((pm = (php_mcrypt *)zend_fetch_resource(Z_RES_P(mcryptind), "MCrypt", le_mcrypt)) == NULL) {
+		RETURN_FALSE;
+	}
 	PHP_MCRYPT_INIT_CHECK
 
 	if (data_len == 0) {
@@ -674,7 +680,9 @@ PHP_FUNCTION(mdecrypt_generic)
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(pm, php_mcrypt * , mcryptind, -1, "MCrypt", le_mcrypt);
+	if ((pm = (php_mcrypt *)zend_fetch_resource(Z_RES_P(mcryptind), "MCrypt", le_mcrypt)) == NULL) {
+		RETURN_FALSE;
+	}
 	PHP_MCRYPT_INIT_CHECK
 
 	if (data_len == 0) {

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -110,7 +110,7 @@ static inline void strip_header(char *header_bag, char *lc_header_bag,
 }
 
 php_stream *php_stream_url_wrap_http_ex(php_stream_wrapper *wrapper,
-		const char *path, const char *mode, int options, char **opened_path,
+		const char *path, const char *mode, int options, zend_string **opened_path,
 		php_stream_context *context, int redirect_max, int flags STREAMS_DC) /* {{{ */
 {
 	php_stream *stream = NULL;
@@ -331,7 +331,7 @@ finish:
 
 		/* enable SSL transport layer */
 		if (stream) {
-			if (php_stream_xport_crypto_setup(stream, STREAM_CRYPTO_METHOD_ANY_CLIENT, NULL) < 0 ||
+			if (php_stream_xport_crypto_setup(stream, STREAM_CRYPTO_METHOD_SSLv23_CLIENT, NULL) < 0 ||
 			    php_stream_xport_crypto_enable(stream, 1) < 0) {
 				php_stream_wrapper_log_error(wrapper, options, "Cannot connect to HTTPS server through proxy");
 				php_stream_close(stream);
@@ -669,7 +669,7 @@ finish:
 		zend_set_local_var_str("http_response_header", sizeof("http_response_header")-1, &ztmp, 0);
 	}
 
-	response_header = zend_hash_str_find_ind(&symbol_table->ht, "http_response_header", sizeof("http_response_header")-1);
+	response_header = zend_hash_str_find_ind(symbol_table, "http_response_header", sizeof("http_response_header")-1);
 
 	if (!php_stream_eof(stream)) {
 		size_t tmp_line_len;
@@ -751,7 +751,7 @@ finish:
 			if (!strncasecmp(http_header_line, "Location: ", 10)) {
 				if (context && (tmpzval = php_stream_context_get_option(context, "http", "follow_location")) != NULL) {
 					follow_location = zval_is_true(tmpzval);
-				} else if (!(response_code >= 300 && response_code < 304 || 307 == response_code || 308 == response_code)) {
+				} else if (!((response_code >= 300 && response_code < 304) || 307 == response_code || 308 == response_code)) {
 					/* we shouldn't redirect automatically
 					if follow_location isn't set and response_code not in (300, 301, 302, 303 and 307)
 					see http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.3.1
@@ -933,7 +933,7 @@ out:
 }
 /* }}} */
 
-php_stream *php_stream_url_wrap_http(php_stream_wrapper *wrapper, const char *path, const char *mode, int options, char **opened_path, php_stream_context *context STREAMS_DC) /* {{{ */
+php_stream *php_stream_url_wrap_http(php_stream_wrapper *wrapper, const char *path, const char *mode, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC) /* {{{ */
 {
 	return php_stream_url_wrap_http_ex(wrapper, path, mode, options, opened_path, context, PHP_URL_REDIRECT_MAX, HTTP_WRAPPER_HEADER_INIT STREAMS_CC);
 }

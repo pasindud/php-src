@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -134,7 +134,7 @@ typedef struct _php_stream_ops  {
 typedef struct _php_stream_wrapper_ops {
 	/* open/create a wrapped stream */
 	php_stream *(*stream_opener)(php_stream_wrapper *wrapper, const char *filename, const char *mode,
-			int options, char **opened_path, php_stream_context *context STREAMS_DC);
+			int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 	/* close/destroy a wrapped stream */
 	int (*stream_closer)(php_stream_wrapper *wrapper, php_stream *stream);
 	/* stat a wrapped stream */
@@ -143,7 +143,7 @@ typedef struct _php_stream_wrapper_ops {
 	int (*url_stat)(php_stream_wrapper *wrapper, const char *url, int flags, php_stream_statbuf *ssb, php_stream_context *context);
 	/* open a "directory" stream */
 	php_stream *(*dir_opener)(php_stream_wrapper *wrapper, const char *filename, const char *mode,
-			int options, char **opened_path, php_stream_context *context STREAMS_DC);
+			int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 
 	const char *label;
 
@@ -253,8 +253,20 @@ END_EXTERN_C()
  * when the resources are auto-destructed */
 #define php_stream_to_zval(stream, zval)	{ ZVAL_RES(zval, (stream)->res); (stream)->__exposed++; }
 
-#define php_stream_from_zval(xstr, pzval)	ZEND_FETCH_RESOURCE2((xstr), php_stream *, (pzval), -1, "stream", php_file_le_stream(), php_file_le_pstream())
-#define php_stream_from_zval_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource((pzval), -1, "stream", NULL, 2, php_file_le_stream(), php_file_le_pstream())
+#define php_stream_from_zval(xstr, pzval)	do { \
+	if (((xstr) = (php_stream*)zend_fetch_resource2_ex((pzval), \
+				"stream", php_file_le_stream(), php_file_le_pstream())) == NULL) { \
+		RETURN_FALSE; \
+	} \
+} while (0)
+#define php_stream_from_res(xstr, res)	do { \
+	if (((xstr) = (php_stream*)zend_fetch_resource2((res), \
+			   	"stream", php_file_le_stream(), php_file_le_pstream())) == NULL) { \
+		RETURN_FALSE; \
+	} \
+} while (0)
+#define php_stream_from_res_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource((res), "stream", php_file_le_stream(), php_file_le_pstream())
+#define php_stream_from_zval_no_verify(xstr, pzval)	(xstr) = (php_stream*)zend_fetch_resource2_ex((pzval), "stream", php_file_le_stream(), php_file_le_pstream())
 
 BEGIN_EXTERN_C()
 PHPAPI php_stream *php_stream_encloses(php_stream *enclosing, php_stream *enclosed);
@@ -294,6 +306,9 @@ PHPAPI size_t _php_stream_read(php_stream *stream, char *buf, size_t count);
 PHPAPI size_t _php_stream_write(php_stream *stream, const char *buf, size_t count);
 #define php_stream_write_string(stream, str)	_php_stream_write(stream, str, strlen(str))
 #define php_stream_write(stream, buf, count)	_php_stream_write(stream, (buf), (count))
+
+PHPAPI void _php_stream_fill_read_buffer(php_stream *stream, size_t size);
+#define php_stream_fill_read_buffer(stream, size)	_php_stream_fill_read_buffer((stream), (size))
 
 #ifdef ZTS
 PHPAPI size_t _php_stream_printf(php_stream *stream, const char *fmt, ...) PHP_ATTRIBUTE_FORMAT(printf, 3, 4);
@@ -542,7 +557,7 @@ PHPAPI int php_register_url_stream_wrapper(const char *protocol, php_stream_wrap
 PHPAPI int php_unregister_url_stream_wrapper(const char *protocol);
 PHPAPI int php_register_url_stream_wrapper_volatile(const char *protocol, php_stream_wrapper *wrapper);
 PHPAPI int php_unregister_url_stream_wrapper_volatile(const char *protocol);
-PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mode, int options, char **opened_path, php_stream_context *context STREAMS_DC);
+PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mode, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 PHPAPI php_stream_wrapper *php_stream_locate_url_wrapper(const char *path, const char **path_for_open, int options);
 PHPAPI const char *php_stream_locate_eol(php_stream *stream, zend_string *buf);
 

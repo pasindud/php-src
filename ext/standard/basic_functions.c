@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -289,11 +289,11 @@ ZEND_BEGIN_ARG_INFO(arginfo_reset, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO(arginfo_current, 0)
-	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, arg)
+	ZEND_ARG_INFO(0, arg)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO(arginfo_key, 0)
-	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, arg)
+	ZEND_ARG_INFO(0, arg)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_min, 0, 0, 1)
@@ -605,10 +605,6 @@ ZEND_BEGIN_ARG_INFO(arginfo_get_magic_quotes_gpc, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO(arginfo_get_magic_quotes_runtime, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_set_magic_quotes_runtime, 0, 0, 1)
-	ZEND_ARG_INFO(0, new_setting)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO(arginfo_constant, 0)
@@ -1423,6 +1419,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_setcookie, 0, 0, 1)
 	ZEND_ARG_INFO(0, path)
 	ZEND_ARG_INFO(0, domain)
 	ZEND_ARG_INFO(0, secure)
+	ZEND_ARG_INFO(0, httponly)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_setrawcookie, 0, 0, 1)
@@ -1432,6 +1429,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_setrawcookie, 0, 0, 1)
 	ZEND_ARG_INFO(0, path)
 	ZEND_ARG_INFO(0, domain)
 	ZEND_ARG_INFO(0, secure)
+	ZEND_ARG_INFO(0, httponly)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_headers_sent, 0, 0, 0)
@@ -1537,12 +1535,14 @@ ZEND_BEGIN_ARG_INFO(arginfo_iptcparse, 0)
 	ZEND_ARG_INFO(0, iptcdata)
 ZEND_END_ARG_INFO()
 /* }}} */
+
 /* {{{ lcg.c */
 ZEND_BEGIN_ARG_INFO(arginfo_lcg_value, 0)
 ZEND_END_ARG_INFO()
 /* }}} */
+
 /* {{{ levenshtein.c */
-ZEND_BEGIN_ARG_INFO(arginfo_levenshtein, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_levenshtein, 0, 0, 2)
 	ZEND_ARG_INFO(0, str1)
 	ZEND_ARG_INFO(0, str2)
 	ZEND_ARG_INFO(0, cost_ins)
@@ -2101,6 +2101,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_stream_socket_enable_crypto, 0, 0, 2)
 	ZEND_ARG_INFO(0, enable)
 	ZEND_ARG_INFO(0, cryptokind)
 	ZEND_ARG_INFO(0, sessionstream)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO(arginfo_stream_socket_crypto_info, 0)
+	ZEND_ARG_INFO(0, stream)
+	ZEND_ARG_INFO(0, infotype)
 ZEND_END_ARG_INFO()
 
 #ifdef HAVE_SHUTDOWN
@@ -2937,8 +2942,6 @@ const zend_function_entry basic_functions[] = { /* {{{ */
 	PHP_FE(header_register_callback,										arginfo_header_register_callback)
 	PHP_FE(get_cfg_var,														arginfo_get_cfg_var)
 
-	PHP_DEP_FALIAS(magic_quotes_runtime,	set_magic_quotes_runtime,		arginfo_set_magic_quotes_runtime)
-	PHP_DEP_FE(set_magic_quotes_runtime,									arginfo_set_magic_quotes_runtime)
 	PHP_FE(get_magic_quotes_gpc,										arginfo_get_magic_quotes_gpc)
 	PHP_FE(get_magic_quotes_runtime,									arginfo_get_magic_quotes_runtime)
 
@@ -3088,6 +3091,7 @@ const zend_function_entry basic_functions[] = { /* {{{ */
 	PHP_FE(stream_socket_recvfrom,											arginfo_stream_socket_recvfrom)
 	PHP_FE(stream_socket_sendto,											arginfo_stream_socket_sendto)
 	PHP_FE(stream_socket_enable_crypto,										arginfo_stream_socket_enable_crypto)
+	PHP_FE(stream_socket_crypto_info,										arginfo_stream_socket_crypto_info)
 #ifdef HAVE_SHUTDOWN
 	PHP_FE(stream_socket_shutdown,											arginfo_stream_socket_shutdown)
 #endif
@@ -3106,7 +3110,6 @@ const zend_function_entry basic_functions[] = { /* {{{ */
 	PHP_FALIAS(set_file_buffer, stream_set_write_buffer,					arginfo_stream_set_write_buffer)
 	PHP_FE(stream_set_chunk_size,											arginfo_stream_set_chunk_size)
 
-	PHP_DEP_FALIAS(set_socket_blocking, stream_set_blocking,				arginfo_stream_set_blocking)
 	PHP_FE(stream_set_blocking,												arginfo_stream_set_blocking)
 	PHP_FALIAS(socket_set_blocking, stream_set_blocking,					arginfo_stream_set_blocking)
 
@@ -3398,6 +3401,9 @@ static void php_putenv_destructor(zval *zv) /* {{{ */
 		unsetenv(pe->key);
 # elif defined(PHP_WIN32)
 		SetEnvironmentVariable(pe->key, NULL);
+# ifndef ZTS
+		_putenv_s(pe->key, "");
+# endif
 # else
 		char **env;
 
@@ -4236,9 +4242,9 @@ PHP_FUNCTION(getopt)
 	/* Get argv from the global symbol table. We calculate argc ourselves
 	 * in order to be on the safe side, even though it is also available
 	 * from the symbol table. */
-	if (Z_TYPE(PG(http_globals)[TRACK_VARS_SERVER]) != IS_UNDEF &&
+	if ((Z_TYPE(PG(http_globals)[TRACK_VARS_SERVER]) == IS_ARRAY || zend_is_auto_global_str(ZEND_STRL("_SERVER"))) &&
 		((args = zend_hash_str_find_ind(HASH_OF(&PG(http_globals)[TRACK_VARS_SERVER]), "argv", sizeof("argv")-1)) != NULL ||
-		(args = zend_hash_str_find_ind(&EG(symbol_table).ht, "argv", sizeof("argv")-1)) != NULL)
+		(args = zend_hash_str_find_ind(&EG(symbol_table), "argv", sizeof("argv")-1)) != NULL)
 	) {
 		int pos = 0;
 		zval *entry;
@@ -4384,6 +4390,10 @@ PHP_FUNCTION(getopt)
    Flush the output buffer */
 PHP_FUNCTION(flush)
 {
+	if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+
 	sapi_flush();
 }
 /* }}} */
@@ -4456,8 +4466,8 @@ PHP_FUNCTION(time_nanosleep)
 		RETURN_TRUE;
 	} else if (errno == EINTR) {
 		array_init(return_value);
-		add_assoc_long_ex(return_value, "seconds", sizeof("seconds"), php_rem.tv_sec);
-		add_assoc_long_ex(return_value, "nanoseconds", sizeof("nanoseconds"), php_rem.tv_nsec);
+		add_assoc_long_ex(return_value, "seconds", sizeof("seconds")-1, php_rem.tv_sec);
+		add_assoc_long_ex(return_value, "nanoseconds", sizeof("nanoseconds")-1, php_rem.tv_nsec);
 		return;
 	} else if (errno == EINVAL) {
 		php_error_docref(NULL, E_WARNING, "nanoseconds was not in the range 0 to 999 999 999 or seconds was negative");
@@ -4569,23 +4579,6 @@ PHP_FUNCTION(get_cfg_var)
 	} else {
 		RETURN_FALSE;
 	}
-}
-/* }}} */
-
-/* {{{ proto bool set_magic_quotes_runtime(int new_setting)
-   magic_quotes_runtime is not supported anymore */
-PHP_FUNCTION(set_magic_quotes_runtime)
-{
-	zend_bool new_setting;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "b", &new_setting) == FAILURE) {
-		return;
-	}
-
-	if (new_setting) {
-		php_error_docref(NULL, E_CORE_ERROR, "magic_quotes_runtime is not supported anymore");
-	}
-	RETURN_FALSE;
 }
 /* }}} */
 

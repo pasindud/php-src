@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -222,6 +222,10 @@ char *alloca();
 # define ZEND_NORETURN __declspec(noreturn)
 #else
 # define ZEND_NORETURN
+#endif
+
+#if (defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__))
+# define HAVE_NORETURN_ALIAS
 #endif
 
 #if ZEND_DEBUG

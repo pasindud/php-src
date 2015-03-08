@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -810,7 +810,7 @@ static void _php_mb_regex_ereg_replace_exec(INTERNAL_FUNCTION_PARAMETERS, OnigOp
 	OnigUChar *pos;
 	OnigUChar *string_lim;
 	char *description = NULL;
-	char pat_buf[2];
+	char pat_buf[4];
 
 	const mbfl_encoding *enc;
 
@@ -861,6 +861,8 @@ static void _php_mb_regex_ereg_replace_exec(INTERNAL_FUNCTION_PARAMETERS, OnigOp
 		convert_to_long_ex(arg_pattern_zval);
 		pat_buf[0] = (char)Z_LVAL_P(arg_pattern_zval);
 		pat_buf[1] = '\0';
+		pat_buf[2] = '\0';
+		pat_buf[3] = '\0';
 
 		arg_pattern = pat_buf;
 		arg_pattern_len = 1;

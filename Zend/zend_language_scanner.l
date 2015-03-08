@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -222,6 +222,9 @@ ZEND_API void zend_save_lexical_state(zend_lex_state *lex_state)
 	lex_state->input_filter = SCNG(input_filter);
 	lex_state->output_filter = SCNG(output_filter);
 	lex_state->script_encoding = SCNG(script_encoding);
+
+	lex_state->ast = CG(ast);
+	lex_state->ast_arena = CG(ast_arena);
 }
 
 ZEND_API void zend_restore_lexical_state(zend_lex_state *lex_state)
@@ -256,6 +259,9 @@ ZEND_API void zend_restore_lexical_state(zend_lex_state *lex_state)
 	SCNG(input_filter) = lex_state->input_filter;
 	SCNG(output_filter) = lex_state->output_filter;
 	SCNG(script_encoding) = lex_state->script_encoding;
+
+	CG(ast) = lex_state->ast;
+	CG(ast_arena) = lex_state->ast_arena;
 
 	RESET_DOC_COMMENT();
 }
@@ -476,7 +482,6 @@ ZEND_API int zend_multibyte_set_filter(const zend_encoding *onetime_encoding)
 
 ZEND_API int open_file_for_scanning(zend_file_handle *file_handle)
 {
-	const char *file_path = NULL;
 	char *buf;
 	size_t size, offset = 0;
 	zend_string *compiled_filename;
@@ -530,12 +535,11 @@ ZEND_API int open_file_for_scanning(zend_file_handle *file_handle)
 	BEGIN(INITIAL);
 
 	if (file_handle->opened_path) {
-		file_path = file_handle->opened_path;
+		compiled_filename = zend_string_copy(file_handle->opened_path);
 	} else {
-		file_path = file_handle->filename;
+		compiled_filename = zend_string_init(file_handle->filename, strlen(file_handle->filename), 0);
 	}
 
-	compiled_filename = zend_string_init(file_path, strlen(file_path), 0);
 	zend_set_compiled_filename(compiled_filename);
 	zend_string_release(compiled_filename);
 
@@ -586,6 +590,9 @@ ZEND_API zend_op_array *compile_file(zend_file_handle *file_handle, int type)
 		if (compiler_result != 0) { /* parser error */
 			zend_bailout();
 		}
+		if (zend_ast_process) {
+			zend_ast_process(CG(ast));
+		}
 		zend_compile_top_stmt(CG(ast));
 		zend_ast_destroy(CG(ast));
 		zend_arena_destroy(CG(ast_arena));
@@ -614,7 +621,7 @@ zend_op_array *compile_filename(int type, zval *filename)
 	zend_file_handle file_handle;
 	zval tmp;
 	zend_op_array *retval;
-	char *opened_path = NULL;
+	zend_string *opened_path = NULL;
 
 	if (Z_TYPE_P(filename) != IS_STRING) {
 		tmp = *filename;
@@ -631,13 +638,13 @@ zend_op_array *compile_filename(int type, zval *filename)
 	retval = zend_compile_file(&file_handle, type);
 	if (retval && file_handle.handle.stream.handle) {
 		if (!file_handle.opened_path) {
-			file_handle.opened_path = opened_path = estrndup(Z_STRVAL_P(filename), Z_STRLEN_P(filename));
+			file_handle.opened_path = opened_path = zend_string_copy(Z_STR_P(filename));
 		}
 
-		zend_hash_str_add_empty_element(&EG(included_files), file_handle.opened_path, strlen(file_handle.opened_path));
+		zend_hash_add_empty_element(&EG(included_files), file_handle.opened_path);
 
 		if (opened_path) {
-			efree(opened_path);
+			zend_string_release(opened_path);
 		}
 	}
 	zend_destroy_file_handle(&file_handle);
@@ -747,6 +754,9 @@ zend_op_array *compile_string(zval *source_string, char *filename)
 
 			zend_stack_push(&CG(context_stack), (void *) &CG(context));
 			zend_init_compiler_context();
+			if (zend_ast_process) {
+				zend_ast_process(CG(ast));
+			}
 			zend_compile_top_stmt(CG(ast));
 			zend_do_end_compilation();
 			zend_emit_final_return(NULL);
@@ -1441,6 +1451,10 @@ NEWLINE ("\r"|"\n"|"\r\n")
 	return T_IS_NOT_EQUAL;
 }
 
+<ST_IN_SCRIPTING>"<=>" {
+	return T_SPACESHIP;
+}
+
 <ST_IN_SCRIPTING>"<=" {
 	return T_IS_SMALLER_OR_EQUAL;
 }
@@ -1574,6 +1588,7 @@ NEWLINE ("\r"|"\n"|"\r\n")
 <ST_IN_SCRIPTING>{BNUM} {
 	char *bin = yytext + 2; /* Skip "0b" */
 	int len = yyleng - 2;
+	char *end;
 
 	/* Skip any leading 0s */
 	while (*bin == '0') {
@@ -1585,29 +1600,54 @@ NEWLINE ("\r"|"\n"|"\r\n")
 		if (len == 0) {
 			ZVAL_LONG(zendlval, 0);
 		} else {
-			ZVAL_LONG(zendlval, ZEND_STRTOL(bin, NULL, 2));
+			errno = 0;
+			ZVAL_LONG(zendlval, ZEND_STRTOL(bin, &end, 2));
+			ZEND_ASSERT(!errno && end == yytext + yyleng);
 		}
 		return T_LNUMBER;
 	} else {
-		ZVAL_DOUBLE(zendlval, zend_bin_strtod(bin, NULL));
+		ZVAL_DOUBLE(zendlval, zend_bin_strtod(bin, (const char **)&end));
+		/* errno isn't checked since we allow HUGE_VAL/INF overflow */
+		ZEND_ASSERT(end == yytext + yyleng);
 		return T_DNUMBER;
 	}
 }
 
 <ST_IN_SCRIPTING>{LNUM} {
+	char *end;
 	if (yyleng < MAX_LENGTH_OF_LONG - 1) { /* Won't overflow */
-		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, NULL, 0));
+		errno = 0;
+		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, &end, 0));
+		/* This isn't an assert, we need to ensure 019 isn't valid octal
+		 * Because the lexing itself doesn't do that for us
+		 */
+		if (end != yytext + yyleng) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Invalid numeric literal");
+		}
+		ZEND_ASSERT(!errno);
 	} else {
 		errno = 0;
-		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, NULL, 0));
+		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, &end, 0));
 		if (errno == ERANGE) { /* Overflow */
+			errno = 0;
 			if (yytext[0] == '0') { /* octal overflow */
-				ZVAL_DOUBLE(zendlval, zend_oct_strtod(yytext, NULL));
+				errno = 0;
+				ZVAL_DOUBLE(zendlval, zend_oct_strtod(yytext, (const char **)&end));
 			} else {
-				ZVAL_DOUBLE(zendlval, zend_strtod(yytext, NULL));
+				ZVAL_DOUBLE(zendlval, zend_strtod(yytext, (const char **)&end));
 			}
+			/* Also not an assert for the same reason */
+			if (end != yytext + yyleng) {
+				zend_error_noreturn(E_COMPILE_ERROR, "Invalid numeric literal");
+			}
+			ZEND_ASSERT(!errno);
 			return T_DNUMBER;
 		}
+		/* Also not an assert for the same reason */
+		if (end != yytext + yyleng) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Invalid numeric literal");
+		}
+		ZEND_ASSERT(!errno);
 	}
 	return T_LNUMBER;
 }
@@ -1615,6 +1655,7 @@ NEWLINE ("\r"|"\n"|"\r\n")
 <ST_IN_SCRIPTING>{HNUM} {
 	char *hex = yytext + 2; /* Skip "0x" */
 	int len = yyleng - 2;
+	char *end;
 
 	/* Skip any leading 0s */
 	while (*hex == '0') {
@@ -1626,19 +1667,30 @@ NEWLINE ("\r"|"\n"|"\r\n")
 		if (len == 0) {
 			ZVAL_LONG(zendlval, 0);
 		} else {
-			ZVAL_LONG(zendlval, ZEND_STRTOL(hex, NULL, 16));
+			errno = 0;
+			ZVAL_LONG(zendlval, ZEND_STRTOL(hex, &end, 16));
+			ZEND_ASSERT(!errno && end == hex + len);
 		}
 		return T_LNUMBER;
 	} else {
-		ZVAL_DOUBLE(zendlval, zend_hex_strtod(hex, NULL));
+		ZVAL_DOUBLE(zendlval, zend_hex_strtod(hex, (const char **)&end));
+		/* errno isn't checked since we allow HUGE_VAL/INF overflow */
+		ZEND_ASSERT(end == hex + len);
 		return T_DNUMBER;
 	}
 }
 
 <ST_VAR_OFFSET>[0]|([1-9][0-9]*) { /* Offset could be treated as a long */
 	if (yyleng < MAX_LENGTH_OF_LONG - 1 || (yyleng == MAX_LENGTH_OF_LONG - 1 && strcmp(yytext, long_min_digits) < 0)) {
-		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, NULL, 10));
+		char *end;
+		errno = 0;
+		ZVAL_LONG(zendlval, ZEND_STRTOL(yytext, &end, 10));
+		if (errno == ERANGE) {
+			goto string;
+		}
+		ZEND_ASSERT(end == yytext + yyleng);
 	} else {
+string:
 		ZVAL_STRINGL(zendlval, yytext, yyleng);
 	}
 	return T_NUM_STRING;
@@ -1650,7 +1702,11 @@ NEWLINE ("\r"|"\n"|"\r\n")
 }
 
 <ST_IN_SCRIPTING>{DNUM}|{EXPONENT_DNUM} {
-	ZVAL_DOUBLE(zendlval, zend_strtod(yytext, NULL));
+	const char *end;
+
+	ZVAL_DOUBLE(zendlval, zend_strtod(yytext, &end));
+	/* errno isn't checked since we allow HUGE_VAL/INF overflow */
+	ZEND_ASSERT(end == yytext + yyleng);
 	return T_DNUMBER;
 }
 

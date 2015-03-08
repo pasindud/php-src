@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -63,6 +63,9 @@ ZEND_METHOD(Closure, __invoke) /* {{{ */
 	/* destruct the function also, then - we have allocated it in get_method */
 	zend_string_release(func->internal_function.function_name);
 	efree(func);
+#if ZEND_DEBUG
+	execute_data->func = NULL;
+#endif
 }
 /* }}} */
 
@@ -349,8 +352,7 @@ static HashTable *zend_closure_get_debug_info(zval *object, int *is_temp) /* {{{
 	if (closure->debug_info->u.v.nApplyCount == 0) {
 		if (closure->func.type == ZEND_USER_FUNCTION && closure->func.op_array.static_variables) {
 			HashTable *static_variables = closure->func.op_array.static_variables;
-			ZVAL_NEW_ARR(&val);
-			zend_array_dup(Z_ARRVAL(val), static_variables);
+			ZVAL_ARR(&val, zend_array_dup(static_variables));
 			zend_hash_str_update(closure->debug_info, "static", sizeof("static")-1, &val);
 		}
 
@@ -359,7 +361,9 @@ static HashTable *zend_closure_get_debug_info(zval *object, int *is_temp) /* {{{
 			zend_hash_str_update(closure->debug_info, "this", sizeof("this")-1, &closure->this_ptr);
 		}
 
-		if (arg_info) {
+		if (arg_info &&
+		    (closure->func.common.num_args ||
+		     (closure->func.common.fn_flags & ZEND_ACC_VARIADIC))) {
 			uint32_t i, num_args, required = closure->func.common.required_num_args;
 
 			array_init(&val);
@@ -481,6 +485,7 @@ ZEND_API void zend_create_closure(zval *res, zend_function *func, zend_class_ent
 
 	closure->func = *func;
 	closure->func.common.prototype = NULL;
+	closure->func.common.fn_flags |= ZEND_ACC_CLOSURE;
 
 	if ((scope == NULL) && this_ptr && (Z_TYPE_P(this_ptr) != IS_UNDEF)) {
 		/* use dummy scope if we're binding an object without specifying a scope */
@@ -497,7 +502,9 @@ ZEND_API void zend_create_closure(zval *res, zend_function *func, zend_class_ent
 			zend_hash_apply_with_arguments(static_variables, zval_copy_static_var, 1, closure->func.op_array.static_variables);
 		}
 		closure->func.op_array.run_time_cache = NULL;
-		(*closure->func.op_array.refcount)++;
+		if (closure->func.op_array.refcount) {
+			(*closure->func.op_array.refcount)++;
+		}
 	} else {
 		/* verify that we aren't binding internal function to a wrong scope */
 		if(func->common.scope != NULL) {

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -201,7 +201,7 @@ static void user_config_cache_entry_dtor(zval *el)
 static int php_cgi_globals_id;
 #define CGIG(v) ZEND_TSRMG(php_cgi_globals_id, php_cgi_globals_struct *, v)
 #if defined(PHP_WIN32)
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 #else
 static php_cgi_globals_struct php_cgi_globals;
@@ -243,7 +243,7 @@ static void print_modules(void)
 
 	zend_hash_init(&sorted_registry, 64, NULL, NULL, 1);
 	zend_hash_copy(&sorted_registry, &module_registry, NULL);
-	zend_hash_sort(&sorted_registry, zend_qsort, module_name_cmp, 0);
+	zend_hash_sort(&sorted_registry, module_name_cmp, 0);
 	zend_hash_apply(&sorted_registry, print_module_info);
 	zend_hash_destroy(&sorted_registry);
 }
@@ -699,13 +699,16 @@ static void sapi_cgi_log_message(char *message)
 
 		request = (fcgi_request*) SG(server_context);
 		if (request) {
-			int len = (int)strlen(message);
+			int ret, len = (int)strlen(message);
 			char *buf = malloc(len+2);
 
 			memcpy(buf, message, len);
 			memcpy(buf + len, "\n", sizeof("\n"));
-			fcgi_write(request, FCGI_STDERR, buf, (int)(len+1));
+			ret = fcgi_write(request, FCGI_STDERR, buf, (int)(len + 1));
 			free(buf);
+			if (ret < 0) {
+				php_handle_aborted_connection();
+			}
 		} else {
 			fprintf(stderr, "%s\n", message);
 		}
@@ -1437,7 +1440,7 @@ PHP_INI_END()
 static void php_cgi_globals_ctor(php_cgi_globals_struct *php_cgi_globals)
 {
 #ifdef ZTS
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	php_cgi_globals->rfc2616_headers = 0;
 	php_cgi_globals->nph = 0;
@@ -1665,9 +1668,6 @@ PHP_FUNCTION(apache_response_headers) /* {{{ */
 		return;
 	}
 
-	if (!&SG(sapi_headers).headers) {
-		RETURN_FALSE;
-	}
 	array_init(return_value);
 	zend_llist_apply_with_argument(&SG(sapi_headers).headers, (llist_apply_with_arg_func_t)add_response_header, return_value);
 }
@@ -1766,7 +1766,7 @@ int main(int argc, char *argv[])
 #ifdef ZTS
 	tsrm_startup(1, 1, 0, NULL);
 	tsrm_ls = ts_resource(0);
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
 	sapi_startup(&cgi_sapi_module);
@@ -2205,9 +2205,9 @@ consult the installation file that came with this distribution, or visit \n\
 								SG(request_info).no_headers = 1;
 							}
 #if ZEND_DEBUG
-							php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) 1997-2014 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+							php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) 1997-2015 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
 #else
-							php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2014 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+							php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2015 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
 #endif
 							php_request_shutdown((void *) 0);
 							fcgi_shutdown();
@@ -2411,7 +2411,7 @@ consult the installation file that came with this distribution, or visit \n\
 						break;
 					case ZEND_HANDLE_MAPPED:
 						if (file_handle.handle.stream.mmap.buf[0] == '#') {
-						    int i = 1;
+						    size_t i = 1;
 
 						    c = file_handle.handle.stream.mmap.buf[i++];
 							while (c != '\n' && c != '\r' && i < file_handle.handle.stream.mmap.len) {

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -57,6 +57,7 @@ PHP_FUNCTION(stream_filter_prepend);
 PHP_FUNCTION(stream_filter_append);
 PHP_FUNCTION(stream_filter_remove);
 PHP_FUNCTION(stream_socket_enable_crypto);
+PHP_FUNCTION(stream_socket_crypto_info);
 PHP_FUNCTION(stream_socket_shutdown);
 PHP_FUNCTION(stream_resolve_include_path);
 PHP_FUNCTION(stream_is_local);

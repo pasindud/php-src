@@ -114,7 +114,6 @@ if (ob_get_level()) echo "Not all buffers were deleted.\n";
 
 error_reporting(E_ALL);
 if (PHP_MAJOR_VERSION < 6) {
-	ini_set('magic_quotes_runtime',0); // this would break tests by modifying EXPECT sections
 	if (ini_get('safe_mode')) {
 		echo <<< SAFE_MODE_WARNING
 
@@ -236,7 +235,6 @@ $ini_overwrites = array(
 		'error_append_string=',
 		'auto_prepend_file=',
 		'auto_append_file=',
-		'magic_quotes_runtime=0',
 		'ignore_repeated_errors=0',
 		'precision=14',
 		'memory_limit=128M',
@@ -1127,7 +1125,10 @@ function system_with_timeout($commandline, $env = null, $stdin = null)
 	$stat = proc_get_status($proc);
 
 	if ($stat['signaled']) {
-		$data .= "\nTermsig=" . $stat['stopsig'];
+		$data .= "\nTermsig=" . $stat['stopsig'] . "\n";
+	}
+	if ($stat["exitcode"] > 128 && $stat["exitcode"] < 160) {
+		$data .= "\nTermsig=" . ($stat["exitcode"] - 128) . "\n";
 	}
 
 	$code = proc_close($proc);

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -235,7 +235,7 @@ PHP_BZ2_API php_stream *_php_stream_bz2open(php_stream_wrapper *wrapper,
 											const char *path,
 											const char *mode,
 											int options,
-											char **opened_path,
+											zend_string **opened_path,
 											php_stream_context *context STREAMS_DC)
 {
 	php_stream *retstream = NULL, *stream = NULL;
@@ -266,20 +266,12 @@ PHP_BZ2_API php_stream *_php_stream_bz2open(php_stream_wrapper *wrapper,
 	bz_file = BZ2_bzopen(path_copy, mode);
 
 	if (opened_path && bz_file) {
-#ifdef VIRTUAL_DIR
-		*opened_path = path_copy;
-		path_copy = NULL;
-#else
-		*opened_path = estrdup(path_copy);
-#endif
+		*opened_path = zend_string_init(path_copy, strlen(path_copy), 0);
 	}
 
 #ifdef VIRTUAL_DIR
-	if (path_copy) {
-		efree(path_copy);
-	}
+	efree(path_copy);
 #endif
-	path_copy = NULL;
 
 	if (bz_file == NULL) {
 		/* that didn't work, so try and get something from the network/wrapper */
@@ -296,7 +288,7 @@ PHP_BZ2_API php_stream *_php_stream_bz2open(php_stream_wrapper *wrapper,
 		 * failed.
 		 */
 		if (opened_path && !bz_file && mode[0] == 'w') {
-			VCWD_UNLINK(*opened_path);
+			VCWD_UNLINK((*opened_path)->val);
 		}
 	}
 

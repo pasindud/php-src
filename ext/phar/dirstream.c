@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | phar:// stream wrapper support                                       |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2005-2014 The PHP Group                                |
+  | Copyright (c) 2005-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -285,7 +285,7 @@ PHAR_ADD_ENTRY:
 
 	if (FAILURE != zend_hash_has_more_elements(data)) {
 		efree(dir);
-		if (zend_hash_sort(data, zend_qsort, phar_compare_dir_name, 0) == FAILURE) {
+		if (zend_hash_sort(data, phar_compare_dir_name, 0) == FAILURE) {
 			FREE_HASHTABLE(data);
 			return NULL;
 		}
@@ -300,7 +300,7 @@ PHAR_ADD_ENTRY:
 /**
  * Open a directory handle within a phar archive
  */
-php_stream *phar_wrapper_open_dir(php_stream_wrapper *wrapper, const char *path, const char *mode, int options, char **opened_path, php_stream_context *context STREAMS_DC) /* {{{ */
+php_stream *phar_wrapper_open_dir(php_stream_wrapper *wrapper, const char *path, const char *mode, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC) /* {{{ */
 {
 	php_url *resource = NULL;
 	php_stream *ret;

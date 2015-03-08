@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -277,7 +277,9 @@ static size_t php_dba_make_key(zval *key, char **key_str, char **key_free)
 
 
 #define DBA_FETCH_RESOURCE(info, id)	\
-	ZEND_FETCH_RESOURCE2(info, dba_info *, id, -1, "DBA identifier", le_db, le_pdb);
+	if ((info = (dba_info *)zend_fetch_resource2(Z_RES_P(id), "DBA identifier", le_db, le_pdb)) == NULL) { \
+		RETURN_FALSE; \
+	}
 
 #define DBA_ID_GET2   DBA_ID_PARS; DBA_GET2;   DBA_FETCH_RESOURCE(info, id)
 #define DBA_ID_GET2_3 DBA_ID_PARS; DBA_GET2_3; DBA_FETCH_RESOURCE(info, id)
@@ -625,7 +627,7 @@ static void php_dba_open(INTERNAL_FUNCTION_PARAMETERS, int persistent)
 	char *file_mode;
 	char mode[4], *pmode, *lock_file_mode = NULL;
 	int persistent_flag = persistent ? STREAM_OPEN_PERSISTENT : 0;
-	char *opened_path = NULL;
+	zend_string *opened_path = NULL;
 	char *lock_name;
 
 	if (ac < 2) {
@@ -851,13 +853,9 @@ static void php_dba_open(INTERNAL_FUNCTION_PARAMETERS, int persistent)
 				/* when not in read mode or failed to open .lck file read only. now try again in create(write) mode and log errors */
 				lock_file_mode = "a+b";
 			} else {
-				if (!persistent) {
-					info->lock.name = opened_path;
-				} else {
-					if (opened_path) {
-						info->lock.name = pestrdup(opened_path, persistent);
-						efree(opened_path);
-					}
+				if (opened_path) {
+					info->lock.name = pestrndup(opened_path->val, opened_path->len, persistent);
+					zend_string_release(opened_path);
 				}
 			}
 		}
@@ -867,15 +865,11 @@ static void php_dba_open(INTERNAL_FUNCTION_PARAMETERS, int persistent)
 				if (lock_dbf) {
 					/* replace the path info with the real path of the opened file */
 					pefree(info->path, persistent);
-					info->path = pestrdup(opened_path, persistent);
+					info->path = pestrndup(opened_path->val, opened_path->len, persistent);
 				}
 				/* now store the name of the lock */
-				if (!persistent) {
-					info->lock.name = opened_path;
-				} else {
-					info->lock.name = pestrdup(opened_path, persistent);
-					efree(opened_path);
-				}
+				info->lock.name = pestrndup(opened_path->val, opened_path->len, persistent);
+				zend_string_release(opened_path);
 			}
 		}
 		if (!lock_dbf) {
@@ -951,7 +945,7 @@ static void php_dba_open(INTERNAL_FUNCTION_PARAMETERS, int persistent)
 		}
 	}
 
-	ZEND_REGISTER_RESOURCE(return_value, info, (persistent ? le_pdb : le_db));
+	RETVAL_RES(zend_register_resource(info, (persistent ? le_pdb : le_db)));
 	FREENOW;
 }
 /* }}} */

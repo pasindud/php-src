@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -32,6 +32,8 @@ void php_win32_core_globals_ctor(void *vg)
 {
 	php_win32_core_globals *wg = (php_win32_core_globals*)vg;
 	memset(wg, 0, sizeof(*wg));
+
+	wg->mail_socket = INVALID_SOCKET;
 }
 
 void php_win32_core_globals_dtor(void *vg)
@@ -50,6 +52,10 @@ void php_win32_core_globals_dtor(void *vg)
 		zend_hash_destroy(wg->registry_directories);
 		free(wg->registry_directories);
 		wg->registry_directories = NULL;
+	}
+
+	if (INVALID_SOCKET != wg->mail_socket) {
+		closesocket(wg->mail_socket);
 	}
 }
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -77,14 +77,15 @@ ZEND_API void rebuild_object_properties(zend_object *zobj) /* {{{ */
 		ALLOC_HASHTABLE(zobj->properties);
 		zend_hash_init(zobj->properties, ce->default_properties_count, NULL, ZVAL_PTR_DTOR, 0);
 		if (ce->default_properties_count) {
+			zend_hash_real_init(zobj->properties, 0);
+			zobj->properties->nInternalPointer = 0;
 			ZEND_HASH_FOREACH_PTR(&ce->properties_info, prop_info) {
 				if (/*prop_info->ce == ce &&*/
 				    (prop_info->flags & ZEND_ACC_STATIC) == 0 &&
 				    Z_TYPE_P(OBJ_PROP(zobj, prop_info->offset)) != IS_UNDEF) {
-					zval zv;
 
-					ZVAL_INDIRECT(&zv, OBJ_PROP(zobj, prop_info->offset));
-					zend_hash_add_new(zobj->properties, prop_info->name, &zv);
+					_zend_hash_append_ind(zobj->properties, prop_info->name, 
+						OBJ_PROP(zobj, prop_info->offset));
 				}
 			} ZEND_HASH_FOREACH_END();
 			while (ce->parent && ce->parent->default_properties_count) {
@@ -150,9 +151,7 @@ ZEND_API HashTable *zend_std_get_debug_info(zval *object, int *is_temp) /* {{{ *
 	if (Z_TYPE(retval) == IS_ARRAY) {
 		if (Z_IMMUTABLE(retval)) {
 			*is_temp = 1;
-			ALLOC_HASHTABLE(ht);
-			zend_array_dup(ht, Z_ARRVAL(retval));
-			return ht;
+			return zend_array_dup(Z_ARRVAL(retval));
 		} else if (Z_REFCOUNT(retval) <= 1) {
 			*is_temp = 1;
 			ALLOC_HASHTABLE(ht);
@@ -475,20 +474,34 @@ ZEND_API int zend_check_property_access(zend_object *zobj, zend_string *prop_inf
 }
 /* }}} */
 
+static void zend_property_guard_dtor(zval *el) /* {{{ */ {
+	efree(Z_PTR_P(el));
+}
+/* }}} */
+
 static zend_long *zend_get_property_guard(zend_object *zobj, zend_string *member) /* {{{ */
 {
-	zval stub, *guard;
+	HashTable *guards;
+	zend_long stub, *guard;
+	zval tmp;
 
-	if (!zobj->guards) {
-		ALLOC_HASHTABLE(zobj->guards);
-		zend_hash_init(zobj->guards, 8, NULL, NULL, 0);
-	} else if ((guard = zend_hash_find(zobj->guards, member)) != NULL) {
-		return &Z_LVAL_P(guard);
+	ZEND_ASSERT(GC_FLAGS(zobj) & IS_OBJ_USE_GUARDS);
+	if (GC_FLAGS(zobj) & IS_OBJ_HAS_GUARDS) {
+		guards = Z_PTR(zobj->properties_table[zobj->ce->default_properties_count]);
+		ZEND_ASSERT(guards != NULL);
+		if ((guard = (zend_long *)zend_hash_find_ptr(guards, member)) != NULL) {
+			return guard;
+		}
+	} else {
+		ALLOC_HASHTABLE(guards);
+		zend_hash_init(guards, 8, NULL, zend_property_guard_dtor, 0);
+		ZVAL_PTR(&tmp, guards);
+		Z_PTR(zobj->properties_table[zobj->ce->default_properties_count]) = guards;
+		GC_FLAGS(zobj) |= IS_OBJ_HAS_GUARDS;
 	}
 
-	ZVAL_LONG(&stub, 0);
-	guard = zend_hash_add_new(zobj->guards, member, &stub);
-	return &Z_LVAL_P(guard);
+	stub = 0;
+	return (zend_long *)zend_hash_add_mem(guards, member, &stub, sizeof(zend_ulong));
 }
 /* }}} */
 
@@ -922,6 +935,9 @@ ZEND_API void zend_std_call_user_call(INTERNAL_FUNCTION_PARAMETERS) /* {{{ */
 
 	/* destruct the function also, then - we have allocated it in get_method */
 	efree_size(func, sizeof(zend_internal_function));
+#if ZEND_DEBUG
+	execute_data->func = NULL;
+#endif
 }
 /* }}} */
 
@@ -1035,6 +1051,9 @@ static union _zend_function *zend_std_get_method(zend_object **obj_ptr, zend_str
 
 	if (EXPECTED(key != NULL)) {
 		lc_method_name = Z_STR_P(key);
+#ifdef ZEND_ALLOCA_MAX_SIZE
+		use_heap = 0;
+#endif
 	} else {
 		STR_ALLOCA_ALLOC(lc_method_name, method_name->len, use_heap);
 		zend_str_tolower_copy(lc_method_name->val, method_name->val, method_name->len);
@@ -1139,6 +1158,9 @@ ZEND_API void zend_std_callstatic_user_call(INTERNAL_FUNCTION_PARAMETERS) /* {{{
 
 	/* destruct the function also, then - we have allocated it in get_method */
 	efree_size(func, sizeof(zend_internal_function));
+#if ZEND_DEBUG
+	execute_data->func = NULL;
+#endif
 }
 /* }}} */
 

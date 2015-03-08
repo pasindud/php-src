@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -191,47 +191,6 @@ ZEND_API char *zend_zval_type_name(const zval *arg) /* {{{ */
 {
 	ZVAL_DEREF(arg);
 	return zend_get_type_by_const(Z_TYPE_P(arg));
-}
-/* }}} */
-
-static int parse_arg_object_to_string(zval *arg, char **p, size_t *pl, int type) /* {{{ */
-{
-	if (Z_OBJ_HANDLER_P(arg, cast_object)) {
-		zval obj;
-		if (Z_OBJ_HANDLER_P(arg, cast_object)(arg, &obj, type) == SUCCESS) {
-			zval_ptr_dtor(arg);
-			ZVAL_COPY_VALUE(arg, &obj);
-			*pl = Z_STRLEN_P(arg);
-			*p = Z_STRVAL_P(arg);
-			return SUCCESS;
-		}
-	}
-	/* Standard PHP objects */
-	if (Z_OBJ_HT_P(arg) == &std_object_handlers || !Z_OBJ_HANDLER_P(arg, cast_object)) {
-		SEPARATE_ZVAL_NOREF(arg);
-		if (zend_std_cast_object_tostring(arg, arg, type) == SUCCESS) {
-			*pl = Z_STRLEN_P(arg);
-			*p = Z_STRVAL_P(arg);
-			return SUCCESS;
-		}
-	}
-	if (!Z_OBJ_HANDLER_P(arg, cast_object) && Z_OBJ_HANDLER_P(arg, get)) {
-		zval rv;
-		zval *z = Z_OBJ_HANDLER_P(arg, get)(arg, &rv);
-		Z_ADDREF_P(z);
-		if(Z_TYPE_P(z) != IS_OBJECT) {
-			zval_dtor(arg);
-			ZVAL_NULL(arg);
-			if (!zend_make_printable_zval(z, arg)) {
-				ZVAL_ZVAL(arg, z, 1, 1);
-			}
-			*pl = Z_STRLEN_P(arg);
-			*p = Z_STRVAL_P(arg);
-			return SUCCESS;
-		}
-		zval_ptr_dtor(z);
-	}
-	return FAILURE;
 }
 /* }}} */
 
@@ -932,7 +891,7 @@ ZEND_API int zend_parse_method_parameters_ex(int flags, int num_args, zval *this
 /* }}} */
 
 /* Argument parsing API -- andrei */
-ZEND_API int _array_init(zval *arg, uint size ZEND_FILE_LINE_DC) /* {{{ */
+ZEND_API int _array_init(zval *arg, uint32_t size ZEND_FILE_LINE_DC) /* {{{ */
 {
 	ZVAL_NEW_ARR(arg);
 	_zend_hash_init(Z_ARRVAL_P(arg), size, ZVAL_PTR_DTOR, 0 ZEND_FILE_LINE_RELAY_CC);
@@ -1131,11 +1090,14 @@ ZEND_API void object_properties_load(zend_object *object, HashTable *properties)
  * calling zend_merge_properties(). */
 ZEND_API int _object_and_properties_init(zval *arg, zend_class_entry *class_type, HashTable *properties ZEND_FILE_LINE_DC) /* {{{ */
 {
-	if (class_type->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
-		char *what =   (class_type->ce_flags & ZEND_ACC_INTERFACE)                ? "interface"
-					 :((class_type->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT) ? "trait"
-					 :                                                              "abstract class";
-		zend_error(E_ERROR, "Cannot instantiate %s %s", what, class_type->name->val);
+	if (class_type->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_TRAIT|ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
+		if (class_type->ce_flags & ZEND_ACC_INTERFACE) {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate interface %s", class_type->name->val);
+		} else if (class_type->ce_flags & ZEND_ACC_TRAIT) {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate trait %s", class_type->name->val);
+		} else {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate abstract class %s", class_type->name->val);
+		}
 	}
 
 	zend_update_class_constants(class_type);
@@ -1715,7 +1677,7 @@ static int zend_startup_module_zval(zval *zv) /* {{{ */
 }
 /* }}} */
 
-static void zend_sort_modules(void *base, size_t count, size_t siz, compare_func_t compare) /* {{{ */
+static void zend_sort_modules(void *base, size_t count, size_t siz, compare_func_t compare, swap_func_t swp) /* {{{ */
 {
 	Bucket *b1 = base;
 	Bucket *b2;
@@ -1821,7 +1783,7 @@ ZEND_API void zend_collect_module_handlers(void) /* {{{ */
 
 ZEND_API int zend_startup_modules(void) /* {{{ */
 {
-	zend_hash_sort(&module_registry, zend_sort_modules, NULL, 0);
+	zend_hash_sort_ex(&module_registry, zend_sort_modules, NULL, 0);
 	zend_hash_apply(&module_registry, zend_startup_module_zval);
 	return SUCCESS;
 }
@@ -2042,6 +2004,16 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 				/* Don't count the variadic argument */
 				internal_function->num_args--;
 			}
+			if (info->type_hint) {
+				if (info->class_name) {
+					ZEND_ASSERT(info->type_hint == IS_OBJECT);
+					if (!scope && (!strcasecmp(info->class_name, "self") || !strcasecmp(info->class_name, "parent"))) {
+						zend_error(E_CORE_ERROR, "Cannot declare a return type of %s outside of a class scope", info->class_name);
+					}
+				}
+
+				internal_function->fn_flags |= ZEND_ACC_HAS_RETURN_TYPE;
+			}
 		} else {
 			internal_function->arg_info = NULL;
 			internal_function->num_args = 0;
@@ -2124,12 +2096,16 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 				__tostring = reg_function;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_GET_FUNC_NAME)) {
 				__get = reg_function;
+				scope->ce_flags |= ZEND_ACC_USE_GUARDS;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_SET_FUNC_NAME)) {
 				__set = reg_function;
+				scope->ce_flags |= ZEND_ACC_USE_GUARDS;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_UNSET_FUNC_NAME)) {
 				__unset = reg_function;
+				scope->ce_flags |= ZEND_ACC_USE_GUARDS;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_ISSET_FUNC_NAME)) {
 				__isset = reg_function;
+				scope->ce_flags |= ZEND_ACC_USE_GUARDS;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_DEBUGINFO_FUNC_NAME)) {
 				__debugInfo = reg_function;
 			} else {
@@ -2239,6 +2215,18 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 			if (__debugInfo->common.fn_flags & ZEND_ACC_STATIC) {
 				zend_error(error_type, "Method %s::%s() cannot be static", scope->name->val, __debugInfo->common.function_name->val);
 			}
+		}
+
+		if (ctor && ctor->common.fn_flags & ZEND_ACC_HAS_RETURN_TYPE && ctor->common.fn_flags & ZEND_ACC_CTOR) {
+			zend_error(E_CORE_ERROR, "Constructor %s::%s() cannot declare a return type", scope->name->val, ctor->common.function_name->val);
+		}
+
+		if (dtor && dtor->common.fn_flags & ZEND_ACC_HAS_RETURN_TYPE && dtor->common.fn_flags & ZEND_ACC_DTOR) {
+			zend_error(E_CORE_ERROR, "Destructor %s::%s() cannot declare a return type", scope->name->val, dtor->common.function_name->val);
+		}
+
+		if (clone && clone->common.fn_flags & ZEND_ACC_HAS_RETURN_TYPE && dtor->common.fn_flags & ZEND_ACC_DTOR) {
+			zend_error(E_CORE_ERROR, "%s::%s() cannot declare a return type", scope->name->val, clone->common.function_name->val);
 		}
 		efree((char*)lc_class_name);
 	}
@@ -3029,6 +3017,7 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 		return 0;
 	}
 
+again:
 	switch (Z_TYPE_P(callable)) {
 		case IS_STRING:
 			if (object) {
@@ -3172,7 +3161,6 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 				}
 			}
 			return 0;
-
 		case IS_OBJECT:
 			if (Z_OBJ_HANDLER_P(callable, get_closure) && Z_OBJ_HANDLER_P(callable, get_closure)(callable, &fcc->calling_scope, &fcc->function_handler, &fcc->object) == SUCCESS) {
 				fcc->called_scope = fcc->calling_scope;
@@ -3185,8 +3173,14 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 				}
 				return 1;
 			}
-			/* break missing intentionally */
-
+			if (callable_name) {
+				*callable_name = zval_get_string(callable);
+			}
+			if (error) zend_spprintf(error, 0, "no array or string given");
+			return 0;
+		case IS_REFERENCE:
+			callable = Z_REFVAL_P(callable);
+			goto again;
 		default:
 			if (callable_name) {
 				*callable_name = zval_get_string(callable);
@@ -3802,11 +3796,10 @@ ZEND_API int zend_update_static_property_stringl(zend_class_entry *scope, const 
 }
 /* }}} */
 
-ZEND_API zval *zend_read_property(zend_class_entry *scope, zval *object, const char *name, size_t name_length, zend_bool silent) /* {{{ */
+ZEND_API zval *zend_read_property(zend_class_entry *scope, zval *object, const char *name, size_t name_length, zend_bool silent, zval *rv) /* {{{ */
 {
 	zval property, *value;
 	zend_class_entry *old_scope = EG(scope);
-	zval rv;
 
 	EG(scope) = scope;
 
@@ -3815,7 +3808,7 @@ ZEND_API zval *zend_read_property(zend_class_entry *scope, zval *object, const c
 	}
 
 	ZVAL_STRINGL(&property, name, name_length);
-	value = Z_OBJ_HT_P(object)->read_property(object, &property, silent?BP_VAR_IS:BP_VAR_R, NULL, &rv);
+	value = Z_OBJ_HT_P(object)->read_property(object, &property, silent?BP_VAR_IS:BP_VAR_R, NULL, rv);
 	zval_ptr_dtor(&property);
 
 	EG(scope) = old_scope;
@@ -3928,7 +3921,7 @@ ZEND_API zend_string *zend_resolve_method_name(zend_class_entry *ce, zend_functi
 	zend_string *name;
 
 	if (f->common.type != ZEND_USER_FUNCTION ||
-	    *(f->op_array.refcount) < 2 ||
+	    (f->op_array.refcount && *(f->op_array.refcount) < 2) ||
 	    !f->common.scope ||
 	    !f->common.scope->trait_aliases) {
 		return f->common.function_name;
@@ -3954,30 +3947,6 @@ ZEND_API zend_string *zend_resolve_method_name(zend_class_entry *ce, zend_functi
 ZEND_API void zend_ctor_make_null(zend_execute_data *execute_data) /* {{{ */
 {
 	if (EX(return_value)) {
-/*
-		if (Z_TYPE_P(EX(return_value)) == IS_OBJECT) {
-			zend_object *object = Z_OBJ_P(EX(return_value));
-			zend_execute_data *ex = EX(prev_execute_data);
-
-			while (ex && Z_OBJ(ex->This) == object) {
-				if (ex->func) {
-					if (ZEND_USER_CODE(ex->func->type)) {
-						if (ex->func->op_array.this_var != -1) {
-							zval *this_var = ZEND_CALL_VAR(ex, ex->func->op_array.this_var);
-							if (this_var != EX(return_value)) {
-								zval_ptr_dtor(this_var);
-								ZVAL_NULL(this_var);
-							}
-						}
-					}
-				}
-				Z_OBJ(ex->This) = NULL;
-				ZVAL_NULL(&ex->This);
-				ex = ex->prev_execute_data;
-			}
-		}
-*/
-		zval_ptr_dtor(EX(return_value));
 		Z_OBJ_P(EX(return_value)) = NULL;
 		ZVAL_NULL(EX(return_value));
 	}

@@ -3,7 +3,7 @@ dnl $Id$
 dnl
 
 PHP_ARG_ENABLE(opcache, whether to enable Zend OPcache support,
-[  --enable-opcache        Enable Zend OPcache support], yes)
+[  --disable-opcache       Disable Zend OPcache support], yes)
 
 if test "$PHP_OPCACHE" != "no"; then
 
@@ -388,4 +388,5 @@ fi
 	shared,,-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1,,yes)
 
   PHP_ADD_BUILD_DIR([$ext_builddir/Optimizer], 1)
+  PHP_ADD_EXTENSION_DEP(opcache, pcre)
 fi

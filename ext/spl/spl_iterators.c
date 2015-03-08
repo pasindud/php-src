@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -476,13 +476,14 @@ static void spl_recursive_it_it_construct(INTERNAL_FUNCTION_PARAMETERS, zend_cla
 	zend_long mode, flags;
 	int inc_refcount = 1;
 	zend_error_handling error_handling;
+	zval caching_it;
 
 	zend_replace_error_handling(EH_THROW, spl_ce_InvalidArgumentException, &error_handling);
 
 	switch (rit_type) {
 		case RIT_RecursiveTreeIterator: {
 
-			zval caching_it, caching_it_flags, *user_caching_it_flags = NULL;
+			zval caching_it_flags, *user_caching_it_flags = NULL;
 			mode = RIT_SELF_FIRST;
 			flags = RTIT_BYPASS_KEY;
 
@@ -947,7 +948,7 @@ static zend_object *spl_RecursiveIteratorIterator_new_ex(zend_class_entry *class
 {
 	spl_recursive_it_object *intern;
 
-	intern = ecalloc(1, sizeof(spl_recursive_it_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(spl_recursive_it_object) + zend_object_properties_size(class_type));
 
 	if (init_prefix) {
 		smart_str_appendl(&intern->prefix[0], "",    0);
@@ -2027,10 +2028,9 @@ SPL_METHOD(CallbackFilterIterator, accept)
 SPL_METHOD(RegexIterator, accept)
 {
 	spl_dual_it_object *intern;
-	char *subject;
-	zend_string *result;
-	int subject_len, use_copy, count = 0;
-	zval *subject_ptr, subject_copy, zcount, *replacement, tmp_replacement;
+	zend_string *result, *subject;
+	int count = 0;
+	zval zcount, *replacement, tmp_replacement, rv;
 
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
@@ -2045,64 +2045,53 @@ SPL_METHOD(RegexIterator, accept)
 	}
 
 	if (intern->u.regex.flags & REGIT_USE_KEY) {
-		subject_ptr = &intern->current.key;
+		subject = zval_get_string(&intern->current.key);
 	} else {
-		subject_ptr = &intern->current.data;
+		subject = zval_get_string(&intern->current.data);
 	}
 
-	ZVAL_UNDEF(&subject_copy);
-	use_copy = zend_make_printable_zval(subject_ptr, &subject_copy);
-	if (use_copy) {
-		subject = Z_STRVAL(subject_copy);
-		subject_len = (int)Z_STRLEN(subject_copy);
-	} else {
-		subject = Z_STRVAL_P(subject_ptr);
-		subject_len = (int)Z_STRLEN_P(subject_ptr);
-	}
-
-	use_copy = 0;
 	switch (intern->u.regex.mode)
 	{
 		case REGIT_MODE_MAX: /* won't happen but makes compiler happy */
 		case REGIT_MODE_MATCH:
-			count = pcre_exec(intern->u.regex.pce->re, intern->u.regex.pce->extra, subject, subject_len, 0, 0, NULL, 0);
+			count = pcre_exec(intern->u.regex.pce->re, intern->u.regex.pce->extra, subject->val, subject->len, 0, 0, NULL, 0);
 			RETVAL_BOOL(count >= 0);
 			break;
 
 		case REGIT_MODE_ALL_MATCHES:
 		case REGIT_MODE_GET_MATCH:
-			if (!use_copy) {
-				subject = estrndup(subject, subject_len);
-				use_copy = 1;
-			}
+//???			if (!use_copy) {
+//???				subject = estrndup(subject, subject_len);
+//???				use_copy = 1;
+//???			}
 			zval_ptr_dtor(&intern->current.data);
 			ZVAL_UNDEF(&intern->current.data);
-			php_pcre_match_impl(intern->u.regex.pce, subject, subject_len, &zcount,
+			php_pcre_match_impl(intern->u.regex.pce, subject->val, subject->len, &zcount,
 				&intern->current.data, intern->u.regex.mode == REGIT_MODE_ALL_MATCHES, intern->u.regex.use_flags, intern->u.regex.preg_flags, 0);
 			RETVAL_BOOL(Z_LVAL(zcount) > 0);
 			break;
 
 		case REGIT_MODE_SPLIT:
-			if (!use_copy) {
-				subject = estrndup(subject, subject_len);
-				use_copy = 1;
-			}
+//???			if (!use_copy) {
+//???				subject = estrndup(subject, subject_len);
+//???				use_copy = 1;
+//???			}
 			zval_ptr_dtor(&intern->current.data);
 			ZVAL_UNDEF(&intern->current.data);
-			php_pcre_split_impl(intern->u.regex.pce, subject, subject_len, &intern->current.data, -1, intern->u.regex.preg_flags);
+			php_pcre_split_impl(intern->u.regex.pce, subject->val, subject->len, &intern->current.data, -1, intern->u.regex.preg_flags);
 			count = zend_hash_num_elements(Z_ARRVAL(intern->current.data));
 			RETVAL_BOOL(count > 1);
 			break;
 
 		case REGIT_MODE_REPLACE:
-			replacement = zend_read_property(intern->std.ce, getThis(), "replacement", sizeof("replacement")-1, 1);
+			replacement = zend_read_property(intern->std.ce, getThis(), "replacement", sizeof("replacement")-1, 1, &rv);
 			if (Z_TYPE_P(replacement) != IS_STRING) {
 				tmp_replacement = *replacement;
 				zval_copy_ctor(&tmp_replacement);
 				convert_to_string(&tmp_replacement);
 				replacement = &tmp_replacement;
 			}
-			result = php_pcre_replace_impl(intern->u.regex.pce, subject, subject_len, replacement, 0, -1, &count);
+			result = php_pcre_replace_impl(intern->u.regex.pce, subject, subject->val, subject->len, replacement, 0, -1, &count);
 
 			if (intern->u.regex.flags & REGIT_USE_KEY) {
 				zval_ptr_dtor(&intern->current.key);
@@ -2121,13 +2110,7 @@ SPL_METHOD(RegexIterator, accept)
 	if (intern->u.regex.flags & REGIT_INVERTED) {
 		RETVAL_BOOL(Z_TYPE_P(return_value) != IS_TRUE);
 	}
-
-	if (use_copy) {
-		efree(subject);
-	}
-	if (!Z_ISUNDEF(subject_copy)) {
-		zval_ptr_dtor(&subject_copy);
-	}
+	zend_string_release(subject);
 } /* }}} */
 
 /* {{{ proto string RegexIterator::getRegex()
@@ -2376,7 +2359,7 @@ static zend_object *spl_dual_it_new(zend_class_entry *class_type)
 {
 	spl_dual_it_object *intern;
 
-	intern = ecalloc(1, sizeof(spl_dual_it_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(spl_dual_it_object) + zend_object_properties_size(class_type));
 	intern->dit_type = DIT_Unknown;
 
 	zend_object_std_init(&intern->std, class_type);

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -23,6 +23,7 @@
 #define ZEND_OBJECTS_API_H
 
 #include "zend.h"
+#include "zend_compile.h"
 
 #define OBJ_BUCKET_INVALID			(1<<0)
 
@@ -78,6 +79,13 @@ static zend_always_inline void zend_object_release(zend_object *obj)
 	} else if (UNEXPECTED(!GC_INFO(obj))) {
 		gc_possible_root(&obj->gc);
 	}
+}
+
+static zend_always_inline size_t zend_object_properties_size(zend_class_entry *ce)
+{
+	return sizeof(zval) *
+		(ce->default_properties_count -
+			((ce->ce_flags & ZEND_ACC_USE_GUARDS) ? 0 : 1));
 }
 
 #endif /* ZEND_OBJECTS_H */

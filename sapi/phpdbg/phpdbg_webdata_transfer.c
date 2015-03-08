@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -43,7 +43,7 @@ PHPDBG_API void phpdbg_webdata_compress(char **msg, int *len) {
 		phpdbg_is_auto_global(ZEND_STRL("_SERVER"));
 		phpdbg_is_auto_global(ZEND_STRL("_REQUEST"));
 		array_init(&zv[1]);
-		zend_hash_copy(Z_ARRVAL(zv[1]), &EG(symbol_table).ht, NULL);
+		zend_hash_copy(Z_ARRVAL(zv[1]), &EG(symbol_table), NULL);
 		Z_ARRVAL(zv[1])->pDestructor = NULL; /* we're operating on a copy! Don't double free zvals */
 		zend_hash_str_del(Z_ARRVAL(zv[1]), ZEND_STRL("GLOBALS")); /* do not use the reference to itself in json */
 		zend_hash_str_add(ht, ZEND_STRL("GLOBALS"), &zv[1]);

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -292,13 +292,10 @@ ZEND_API void convert_to_long_base(zval *op, int base) /* {{{ */
 		case IS_TRUE:
 			ZVAL_LONG(op, 1);
 			break;
-		case IS_RESOURCE: {
-				zend_long l = Z_RES_HANDLE_P(op);
-				zval_ptr_dtor(op);
-				ZVAL_LONG(op, l);
-			}
-			/* break missing intentionally */
-			Z_TYPE_INFO_P(op) = IS_LONG;
+		case IS_RESOURCE:
+			tmp = Z_RES_HANDLE_P(op);
+			zval_ptr_dtor(op);
+			ZVAL_LONG(op, tmp);
 			break;
 		case IS_LONG:
 			break;
@@ -489,7 +486,7 @@ ZEND_API void _convert_to_string(zval *op ZEND_FILE_LINE_DC) /* {{{ */
 		case IS_UNDEF:
 		case IS_NULL:
 		case IS_FALSE: {
-					ZVAL_EMPTY_STRING(op);
+			ZVAL_EMPTY_STRING(op);
 			break;
 		}
 		case IS_TRUE:
@@ -500,6 +497,7 @@ ZEND_API void _convert_to_string(zval *op ZEND_FILE_LINE_DC) /* {{{ */
 		case IS_RESOURCE: {
 			char buf[sizeof("Resource id #") + MAX_LENGTH_OF_LONG];
 			int len = snprintf(buf, sizeof(buf), "Resource id #" ZEND_LONG_FMT, (zend_long)Z_RES_HANDLE_P(op));
+			zval_ptr_dtor(op);
 			ZVAL_NEW_STR(op, zend_string_init(buf, len, 0));
 			break;
 		}
@@ -568,8 +566,7 @@ ZEND_API void convert_to_array(zval *op) /* {{{ */
 					HashTable *obj_ht = Z_OBJ_HT_P(op)->get_properties(op);
 					if (obj_ht) {
 						zval arr;
-						ZVAL_NEW_ARR(&arr);
-						zend_array_dup(Z_ARRVAL(arr), obj_ht);
+						ZVAL_ARR(&arr, zend_array_dup(obj_ht));
 						zval_dtor(op);
 						ZVAL_COPY_VALUE(op, &arr);
 						return;
@@ -2666,7 +2663,7 @@ ZEND_API zend_uchar is_numeric_str_function(const zend_string *str, zend_long *l
 ZEND_API zend_uchar _is_numeric_string_ex(const char *str, size_t length, zend_long *lval, double *dval, int allow_errors, int *oflow_info) /* {{{ */
 {
 	const char *ptr;
-	int base = 10, digits = 0, dp_or_e = 0;
+	int digits = 0, dp_or_e = 0;
 	double local_dval = 0.0;
 	zend_uchar type;
 
@@ -2691,13 +2688,6 @@ ZEND_API zend_uchar _is_numeric_string_ex(const char *str, size_t length, zend_l
 	}
 
 	if (ZEND_IS_DIGIT(*ptr)) {
-		/* Handle hex numbers
-		 * str is used instead of ptr to disallow signs and keep old behavior */
-		if (length > 2 && *str == '0' && (str[1] == 'x' || str[1] == 'X')) {
-			base = 16;
-			ptr += 2;
-		}
-
 		/* Skip any leading 0s */
 		while (*ptr == '0') {
 			ptr++;
@@ -2708,42 +2698,30 @@ ZEND_API zend_uchar _is_numeric_string_ex(const char *str, size_t length, zend_l
 		 * a full match, stop when there are too many digits for a long */
 		for (type = IS_LONG; !(digits >= MAX_LENGTH_OF_LONG && (dval || allow_errors == 1)); digits++, ptr++) {
 check_digits:
-			if (ZEND_IS_DIGIT(*ptr) || (base == 16 && ZEND_IS_XDIGIT(*ptr))) {
+			if (ZEND_IS_DIGIT(*ptr)) {
 				continue;
-			} else if (base == 10) {
-				if (*ptr == '.' && dp_or_e < 1) {
-					goto process_double;
-				} else if ((*ptr == 'e' || *ptr == 'E') && dp_or_e < 2) {
-					const char *e = ptr + 1;
+			} else if (*ptr == '.' && dp_or_e < 1) {
+				goto process_double;
+			} else if ((*ptr == 'e' || *ptr == 'E') && dp_or_e < 2) {
+				const char *e = ptr + 1;
 
-					if (*e == '-' || *e == '+') {
-						ptr = e++;
-					}
-					if (ZEND_IS_DIGIT(*e)) {
-						goto process_double;
-					}
+				if (*e == '-' || *e == '+') {
+					ptr = e++;
+				}
+				if (ZEND_IS_DIGIT(*e)) {
+					goto process_double;
 				}
 			}
 
 			break;
 		}
 
-		if (base == 10) {
-			if (digits >= MAX_LENGTH_OF_LONG) {
-				if (oflow_info != NULL) {
-					*oflow_info = *str == '-' ? -1 : 1;
-				}
-				dp_or_e = -1;
-				goto process_double;
-			}
-		} else if (!(digits < SIZEOF_ZEND_LONG * 2 || (digits == SIZEOF_ZEND_LONG * 2 && ptr[-digits] <= '7'))) {
-			if (dval) {
-				local_dval = zend_hex_strtod(str, &ptr);
-			}
+		if (digits >= MAX_LENGTH_OF_LONG) {
 			if (oflow_info != NULL) {
-				*oflow_info = 1;
+				*oflow_info = *str == '-' ? -1 : 1;
 			}
-			type = IS_DOUBLE;
+			dp_or_e = -1;
+			goto process_double;
 		}
 	} else if (*ptr == '.' && ZEND_IS_DIGIT(ptr[1])) {
 process_double:
@@ -2787,7 +2765,7 @@ process_double:
 		}
 
 		if (lval) {
-			*lval = ZEND_STRTOL(str, NULL, base);
+			*lval = ZEND_STRTOL(str, NULL, 10);
 		}
 
 		return IS_LONG;
@@ -2891,6 +2869,38 @@ ZEND_API const char* zend_memnrstr_ex(const char *haystack, const char *needle, 
 	return NULL;
 }
 /* }}} */
+
+#if !ZEND_DVAL_TO_LVAL_CAST_OK
+# if SIZEOF_ZEND_LONG == 4
+ZEND_API zend_long zend_dval_to_lval_slow(double d)
+{
+	double	two_pow_32 = pow(2., 32.),
+			dmod;
+
+	dmod = fmod(d, two_pow_32);
+	if (dmod < 0) {
+		/* we're going to make this number positive; call ceil()
+		 * to simulate rounding towards 0 of the negative number */
+		dmod = ceil(dmod);// + two_pow_32;
+	}
+	return (zend_long)(zend_ulong)dmod;
+}
+#else
+ZEND_API zend_long zend_dval_to_lval_slow(double d)
+{
+	double	two_pow_64 = pow(2., 64.),
+			dmod;
+
+	dmod = fmod(d, two_pow_64);
+	if (dmod < 0) {
+		/* no need to call ceil; original double must have had no
+		 * fractional part, hence dmod does not have one either */
+		dmod += two_pow_64;
+	}
+	return (zend_long)(zend_ulong)dmod;
+}
+#endif
+#endif
 
 /*
  * Local variables:

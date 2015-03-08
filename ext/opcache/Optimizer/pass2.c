@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 The PHP Group                                |
+   | Copyright (c) 1998-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -203,7 +203,9 @@ void zend_optimizer_pass2(zend_op_array *op_array)
 						jmp_to = &op_array->brk_cont_array[array_offset];
 						array_offset = jmp_to->parent;
 						if (--nest_levels > 0) {
-							if (op_array->opcodes[jmp_to->brk].opcode == ZEND_FREE) {
+							if (op_array->opcodes[jmp_to->brk].opcode == ZEND_FREE ||
+							    op_array->opcodes[jmp_to->brk].opcode == ZEND_FE_FREE ||
+							    op_array->opcodes[jmp_to->brk].opcode == ZEND_END_SILENCE) {
 								dont_optimize = 1;
 								break;
 							}

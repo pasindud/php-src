@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -88,8 +88,8 @@ static void php_filter_encode_url(zval *value, const unsigned char* chars, const
 	}
 */
 	str = zend_string_alloc(3 * Z_STRLEN_P(value), 0);
-	p = str->val;
-	s = Z_STRVAL_P(value);
+	p = (unsigned char *) str->val;
+	s = (unsigned char *) Z_STRVAL_P(value);
 	e = s + Z_STRLEN_P(value);
 
 	while (s < e) {
@@ -264,7 +264,7 @@ void php_filter_full_special_chars(PHP_INPUT_FILTER_PARAM_DECL)
 	} else {
 		quotes = ENT_NOQUOTES;
 	}
-	buf = php_escape_html_entities_ex(Z_STRVAL_P(value), Z_STRLEN_P(value), 1, quotes, SG(default_charset), 0);
+	buf = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_P(value), Z_STRLEN_P(value), 1, quotes, SG(default_charset), 0);
 	zval_ptr_dtor(value);
 	ZVAL_STR(value, buf);
 }
@@ -373,7 +373,7 @@ void php_filter_magic_quotes(PHP_INPUT_FILTER_PARAM_DECL)
 	zend_string *buf;
 
 	/* just call php_addslashes quotes */
-	buf = php_addslashes(Z_STRVAL_P(value), Z_STRLEN_P(value), 0);
+	buf = php_addslashes(Z_STR_P(value), 0);
 
 	zval_ptr_dtor(value);
 	ZVAL_STR(value, buf);

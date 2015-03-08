@@ -92,7 +92,6 @@ void fpm_request_reading_headers() /* {{{ */
 	proc->request_method[0] = '\0';
 	proc->script_filename[0] = '\0';
 	proc->query_string[0] = '\0';
-	proc->query_string[0] = '\0';
 	proc->auth_user[0] = '\0';
 	proc->content_length = 0;
 	fpm_scoreboard_proc_release(proc);
@@ -220,8 +219,6 @@ void fpm_request_finished() /* {{{ */
 
 	proc->request_stage = FPM_REQUEST_FINISHED;
 	proc->tv = now;
-	memset(&proc->accepted, 0, sizeof(proc->accepted));
-	proc->accepted_epoch = 0;
 	fpm_scoreboard_proc_release(proc);
 }
 /* }}} */

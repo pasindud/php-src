@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -87,8 +87,7 @@ PHP_FUNCTION(stream_socket_pair)
    Open a client connection to a remote address */
 PHP_FUNCTION(stream_socket_client)
 {
-	char *host;
-	size_t host_len;
+	zend_string *host;
 	zval *zerrno = NULL, *zerrstr = NULL, *zcontext = NULL;
 	double timeout = (double)FG(default_socket_timeout);
 	php_timeout_ull conv;
@@ -102,14 +101,14 @@ PHP_FUNCTION(stream_socket_client)
 
 	RETVAL_FALSE;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|z/z/dlr", &host, &host_len, &zerrno, &zerrstr, &timeout, &flags, &zcontext) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S|z/z/dlr", &host, &zerrno, &zerrstr, &timeout, &flags, &zcontext) == FAILURE) {
 		RETURN_FALSE;
 	}
 
 	context = php_stream_context_from_zval(zcontext, flags & PHP_FILE_NO_DEFAULT_CONTEXT);
 
 	if (flags & PHP_STREAM_CLIENT_PERSISTENT) {
-		spprintf(&hashkey, 0, "stream_socket_client__%s", host);
+		spprintf(&hashkey, 0, "stream_socket_client__%s", host->val);
 	}
 
 	/* prepare the timeout value for use */
@@ -130,7 +129,7 @@ PHP_FUNCTION(stream_socket_client)
 		ZVAL_EMPTY_STRING(zerrstr);
 	}
 
-	stream = php_stream_xport_create(host, host_len, REPORT_ERRORS,
+	stream = php_stream_xport_create(host->val, host->len, REPORT_ERRORS,
 			STREAM_XPORT_CLIENT | (flags & PHP_STREAM_CLIENT_CONNECT ? STREAM_XPORT_CONNECT : 0) |
 			(flags & PHP_STREAM_CLIENT_ASYNC_CONNECT ? STREAM_XPORT_CONNECT_ASYNC : 0),
 			hashkey, &tv, context, &errstr, &err);
@@ -138,7 +137,7 @@ PHP_FUNCTION(stream_socket_client)
 
 	if (stream == NULL) {
 		/* host might contain binary characters */
-		zend_string *quoted_host = php_addslashes(host, host_len, 0);
+		zend_string *quoted_host = php_addslashes(host, 0);
 
 		php_error_docref(NULL, E_WARNING, "unable to connect to %s (%s)", quoted_host->val, errstr == NULL ? "Unknown error" : errstr->val);
 		zend_string_release(quoted_host);
@@ -917,11 +916,11 @@ static php_stream_context *decode_context_param(zval *contextresource)
 {
 	php_stream_context *context = NULL;
 
-	context = zend_fetch_resource(contextresource, -1, NULL, NULL, 1, php_le_stream_context());
+	context = zend_fetch_resource_ex(contextresource, NULL, php_le_stream_context());
 	if (context == NULL) {
 		php_stream *stream;
 
-		stream = zend_fetch_resource(contextresource, -1, NULL, NULL, 2, php_file_le_stream(), php_file_le_pstream);
+		stream = zend_fetch_resource2_ex(contextresource, NULL, php_file_le_stream(), php_file_le_pstream());
 
 		if (stream) {
 			context = PHP_STREAM_CONTEXT(stream);
@@ -1183,7 +1182,7 @@ static void apply_filter_to_stream(int append, INTERNAL_FUNCTION_PARAMETERS)
 	}
 
 	if (filter) {
-		filter->res = ZEND_REGISTER_RESOURCE(NULL, filter, php_file_le_stream_filter());
+		filter->res = zend_register_resource(filter, php_file_le_stream_filter());
 		GC_REFCOUNT(filter->res)++;
 		RETURN_RES(filter->res);
 	} else {
@@ -1219,7 +1218,7 @@ PHP_FUNCTION(stream_filter_remove)
 		RETURN_FALSE;
 	}
 
-	filter = zend_fetch_resource(zfilter, -1, NULL, NULL, 1, php_file_le_stream_filter());
+	filter = zend_fetch_resource(Z_RES_P(zfilter), NULL, php_file_le_stream_filter());
 	if (!filter) {
 		php_error_docref(NULL, E_WARNING, "Invalid resource given, not a stream filter");
 		RETURN_FALSE;
@@ -1486,12 +1485,53 @@ PHP_FUNCTION(stream_socket_enable_crypto)
 }
 /* }}} */
 
+/* {{{ proto int stream_socket_crypto_info(resource stream  [, int infotype])
+   Retrieve information about the stream's crypto session */
+PHP_FUNCTION(stream_socket_crypto_info)
+{
+	zval *zstream = NULL;
+	php_stream *stream = NULL;
+	zend_long infotype = 0;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "r|l", &zstream, &infotype) == FAILURE) {
+		RETURN_FALSE;
+	}
+
+	php_stream_from_zval(stream, zstream);
+
+	if (infotype == 0) {
+		infotype = STREAM_CRYPTO_INFO_ALL;
+	} else {
+		switch (infotype) {
+			case STREAM_CRYPTO_INFO_CIPHER_NAME:
+			case STREAM_CRYPTO_INFO_CIPHER_BITS:
+			case STREAM_CRYPTO_INFO_CIPHER_VERSION:
+			case STREAM_CRYPTO_INFO_CIPHER:
+			case STREAM_CRYPTO_INFO_PROTOCOL:
+			case STREAM_CRYPTO_INFO_ALPN_PROTOCOL:
+			case STREAM_CRYPTO_INFO_ALL:
+				break;
+			default:
+				php_error_docref(NULL, E_WARNING, "unknown crypto info type");
+				RETURN_FALSE;
+		}
+	}
+
+	if (php_stream_xport_crypto_info(stream, infotype, return_value) != PHP_STREAM_OPTION_RETURN_OK) {
+		RETURN_FALSE;
+	}
+
+	/* return_value populated by php_stream_xport_crypto_info() upon success */
+}
+/* }}} */
+
 /* {{{ proto string stream_resolve_include_path(string filename)
 Determine what file will be opened by calls to fopen() with a relative path */
 PHP_FUNCTION(stream_resolve_include_path)
 {
-	char *filename, *resolved_path;
+	char *filename;
 	size_t filename_len;
+	zend_string *resolved_path;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &filename, &filename_len) == FAILURE) {
 		return;
@@ -1500,10 +1540,7 @@ PHP_FUNCTION(stream_resolve_include_path)
 	resolved_path = zend_resolve_path(filename, (int)filename_len);
 
 	if (resolved_path) {
-		// TODO: avoid reallocation ???
-		RETVAL_STRING(resolved_path);
-		efree(resolved_path);
-		return;
+		RETURN_STR(resolved_path);
 	}
 	RETURN_FALSE;
 }

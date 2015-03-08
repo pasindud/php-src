@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2014 The PHP Group                                |
+  | Copyright (c) 2006-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -262,7 +262,7 @@ void * _mysqlnd_erealloc(void *ptr, size_t new_size MYSQLND_MEM_D)
 	/* -1 is also "true" */
 	if (*threshold) {
 #endif
-		ret = _erealloc(REAL_PTR(ptr), REAL_SIZE(new_size), 0 ZEND_FILE_LINE_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+		ret = _erealloc(REAL_PTR(ptr), REAL_SIZE(new_size) ZEND_FILE_LINE_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 #if PHP_DEBUG
 		--*threshold;
 	} else if (*threshold == 0) {

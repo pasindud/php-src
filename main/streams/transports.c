@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -386,6 +386,25 @@ PHPAPI int php_stream_xport_crypto_enable(php_stream *stream, int activate)
 	}
 
 	php_error_docref("streams.crypto", E_WARNING, "this stream does not support SSL/crypto");
+
+	return ret;
+}
+
+PHPAPI int php_stream_xport_crypto_info(php_stream *stream, zend_long infotype, zval *zresult)
+{
+	php_stream_xport_crypto_param param;
+	int ret;
+
+	memset(&param, 0, sizeof(param));
+	param.op = STREAM_XPORT_CRYPTO_OP_INFO;
+	param.inputs.zresult = zresult;
+	param.inputs.infotype = infotype;
+
+	ret = php_stream_set_option(stream, PHP_STREAM_OPTION_CRYPTO_API, 0, &param);
+
+	if (ret != PHP_STREAM_OPTION_RETURN_OK) {
+		php_error_docref("streams.crypto", E_WARNING, "this stream does not support SSL/crypto");
+	}
 
 	return ret;
 }
