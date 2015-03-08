@@ -622,9 +622,14 @@ again:
 			break;
 
 		case IS_LONG:
-			smart_str_append_long(buf, Z_LVAL_P(val));
+			if (options & PHP_JSON_BIGINT_AS_STRING)
+			{
+				convert_to_string(val);
+				json_escape_string(buf, Z_STRVAL_P(val), Z_STRLEN_P(val), options);
+			}else{
+  				smart_str_append_long(buf, Z_LVAL_P(val));
+			}
 			break;
-
 		case IS_DOUBLE:
 			{
 				char *d = NULL;
